@@ -1,0 +1,13 @@
+{
+  "id": "emIlaG5y7GwTb4gi54uGp_pd3XA",
+  "rawId": "emIlaG5y7GwTb4gi54uGp_pd3XA",
+  "type": "public-key",
+  "authenticatorAttachment": "cross-platform",
+  "response": {
+    "authenticatorData": "PpZrl-Wqt-OFfBpyy2SraN1m7LT0GZORwGA7-6ujYkMdAAAAAA",
+    "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiRmE4NHA5dlBRT0FkSmRRV2JFWHNCR3NPM2FjeWNSSGZxcks2WnJzMkdMRSIsIm9yaWdpbiI6Imh0dHBzOi8vd3d3LnBhc3NrZXlzLWRlYnVnZ2VyLmlvIiwiY3Jvc3NPcmlnaW4iOmZhbHNlfQ",
+    "signature": "MEYCIQCb8hntGNvoOE42ItqZG2gZdN4xidbz0xRLiu1Ru7SASQIhAJzN9JoGo_zyuuDqBEpscoOE306PxSOm45NIttqB62Cd",
+    "userHandle": "skji3OIxJTnPL9JvJwgDZCxirrpzpdDGTHBws351BbA",
+    "publicKey": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEHMtNtNhPyX5ibj29XWy-NTcPrMQFNiWb71MyUVGoXVur_1G522gkJYAd0V96KvljlQX5lsWUUuMAverTqoYsYw"
+  }
+}

@@ -1,0 +1,80 @@
+
+use pinocchio_log::log;
+use num_enum::{IntoPrimitive, TryFromPrimitive};
+use pinocchio::{program_error::ProgramError, ProgramResult};
+use thiserror::Error;
+
+#[repr(u32)]
+#[derive(Debug, Error, Clone, Copy, PartialEq, Eq, IntoPrimitive, TryFromPrimitive)]
+pub enum ExternalSignatureProgramError {
+    // Nonce Related Errors
+    #[error("Invalid slothash index")]
+    InvalidSlothashIndex,
+    #[error("Invalid truncated slot")]
+    InvalidTruncatedSlot,
+    #[error("Expired slothash")]
+    ExpiredSlothash,
+    #[error("Missing nonce signature")]
+    MissingNonceSignature,
+    #[error("CPI not allowed")]
+    CPINotAllowed,
+
+    /// Instrospection Related Errors
+    #[error("Invalid instruction sysvar account")]
+    InvalidInstructionSysvarAccount,
+    #[error("Invalid precompile id")]
+    InvalidPrecompileId,
+    #[error("Invalid number of precompile signatures")]
+    InvalidNumPrecompileSignatures,
+    #[error("Invalid signature index")]
+    InvalidSignatureIndex,
+    #[error("Invalid signature offset")]
+    InvalidSignatureOffset,
+
+    /// Account Ser/Des Related Errors
+    #[error("Error initializing header")]
+    ErrorInitializingHeader,
+    #[error("Error deserializing header")]
+    ErrorDeserializingHeader,
+    #[error("Error initializing account data")]
+    ErrorInitializingAccountData,
+    #[error("Error deserializing account data")]
+    ErrorDeserializingAccountData,
+
+    /// Execute Instructions Related Errors
+    #[error("Invalid extra verification data args")]
+    InvalidExtraVerificationDataArgs,
+    #[error("Invalid execution args")]
+    InvalidExecutionArgs,
+
+    /// Signature Scheme Related Errors
+    #[error("Invalid signature scheme")]
+    InvalidSignatureScheme,
+
+    /// P256 WebAuthn Related Errors
+    #[error("Relying party mismatch")]
+    RelyingPartyMismatch,
+    #[error("Client data hash mismatch")]
+    ClientDataHashMismatch,
+    #[error("Account is not writable")]
+    AccountNotWritable,
+}
+
+impl From<ExternalSignatureProgramError> for ProgramError {
+    fn from(e: ExternalSignatureProgramError) -> Self {
+        ProgramError::Custom(e as u32)
+    }
+}
+
+#[track_caller]
+#[inline(always)]
+pub fn assert_with_msg(v: bool, err: impl Into<ProgramError>, msg: &str) -> ProgramResult {
+    if v {
+        Ok(())
+    } else {
+        let caller = std::panic::Location::caller();
+        let caller_string = caller.to_string();
+        log!("{}. \n{}", msg, caller_string.as_str());
+        Err(err.into())
+    }
+}

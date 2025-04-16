@@ -1,0 +1,260 @@
+use std::marker::PhantomData;
+
+use crate::errors::ExternalSignatureProgramError;
+use crate::signatures::SignatureScheme;
+use borsh::{BorshDeserialize, BorshSerialize};
+use bytemuck::{Pod, Zeroable};
+use pinocchio::account_info::{AccountInfo, Ref};
+use pinocchio::instruction::{Seed, Signer};
+use pinocchio::program_error::ProgramError;
+use pinocchio::pubkey::{try_find_program_address, Pubkey};
+use pinocchio::sysvars::instructions::Instructions;
+use pinocchio::{seeds, ProgramResult};
+
+use super::p256_webauthn::P256WebauthnAccountData;
+
+/// Version and type header for all account data
+#[derive(Pod, Zeroable, Copy, Clone)]
+#[repr(C)]
+pub struct AccountHeader {
+    /// Version number for forward compatibility
+    pub version: u8,
+
+    /// Signature scheme identifier
+    pub scheme: u8,
+
+    pub reserved: [u8; 2],
+}
+
+impl AccountHeader {
+    pub fn size() -> usize {
+        core::mem::size_of::<AccountHeader>()
+    }
+    pub fn version(&self) -> u8 {
+        self.version
+    }
+    pub fn scheme(&self) -> u8 {
+        self.scheme
+    }
+    pub fn set<T: ExternallyOwnedAccountData>(&mut self) {
+        self.version = T::version();
+        self.scheme = T::scheme();
+    }
+}
+pub enum ExternallyOwnedAccountType {
+    P256Webauthn,
+}
+
+pub trait AccountSeedsTrait {
+    fn key(&self) -> &Pubkey;
+    fn bump(&self) -> u8;
+    fn seeds(&self) -> Vec<&[u8]>;
+}
+pub trait ExternallyOwnedAccountData: Pod + Zeroable + Copy + Clone {
+    type AccountSeeds: AccountSeedsTrait;
+    type DeriveAccountArgs: for<'a> From<&'a Self::ParsedVerificationData>
+        + for<'a> From<&'a Self::ParsedInitializationData>;
+
+    type RawInitializationData: BorshDeserialize;
+    type ParsedInitializationData: From<Self::RawInitializationData>;
+    type RawVerificationData: BorshDeserialize;
+    type ParsedVerificationData: From<Self::RawVerificationData>;
+
+    fn get_initialization_payload() -> &'static [u8];
+    fn initialize_account(
+        &mut self,
+        args: &Self::ParsedInitializationData,
+    ) -> Result<(), ProgramError>;
+    fn check_account(
+        &self,
+        account_info: &AccountInfo,
+        args: &Self::ParsedVerificationData,
+    ) -> Result<Self::AccountSeeds, ProgramError>;
+    fn derive_account(args: Self::DeriveAccountArgs) -> Result<Self::AccountSeeds, ProgramError>;
+    fn version() -> u8;
+    fn scheme() -> u8;
+    fn size() -> usize;
+    fn verfiy_initialization_payload<'a>(
+        &mut self,
+        instructions_sysvar_account: &Instructions<Ref<'a, [u8]>>,
+        initialization_data: &Self::ParsedInitializationData,
+        payload: &[u8],
+    ) -> Result<(), ProgramError>;
+    fn verify_payload<'a>(
+        &mut self,
+        instructions_sysvar_account: &Instructions<Ref<'a, [u8]>>,
+        extra_verification_data: &Self::ParsedVerificationData,
+        payload: &[u8],
+    ) -> Result<(), ProgramError>;
+}
+
+pub trait DataAccess<'a, T: ExternallyOwnedAccountData> {
+    type HeaderType;
+    type DataOutput;
+
+    fn key(&self) -> &Pubkey;
+    fn size() -> usize;
+    fn header(&self) -> Self::HeaderType;
+    fn get_initialization_payload(&self) -> &'static [u8];
+    fn check_account(
+        &self,
+        args: &T::ParsedVerificationData,
+    ) -> Result<T::AccountSeeds, ProgramError>;
+    fn derive_account(args: T::DeriveAccountArgs) -> Result<T::AccountSeeds, ProgramError>;
+    fn data(&self) -> Result<Self::DataOutput, ProgramError>;
+    fn get_execution_account(&self) -> ExecutionAccount<'a>;
+}
+pub struct ExecutionAccount<'a> {
+    pub key: Pubkey,
+    pub bump: u8,
+    pub seeds: [&'a [u8]; 2],
+}
+
+impl<'a> ExecutionAccount<'a> {
+    pub fn to_signer_seeds(&self) -> [Seed; 3] {
+        let bump_ref = core::slice::from_ref(&self.bump);
+        let seeds = seeds!(self.seeds[0], self.seeds[1], bump_ref);
+        seeds
+    }
+}
+
+pub struct ExternallyOwnedAccount<'a, T: ExternallyOwnedAccountData> {
+    phantom: PhantomData<T>,
+    pub account_info: &'a AccountInfo,
+    data: &'a mut [u8],
+}
+
+impl<'a, T: ExternallyOwnedAccountData> ExternallyOwnedAccount<'a, T> {
+    pub fn new(account_info: &'a AccountInfo) -> Result<Self, ProgramError> {
+        let mut data = account_info.try_borrow_mut_data()?;
+        let data_ptr = data.as_mut_ptr(); // Get a raw pointer to the data
+        let data_slice: &'a mut [u8] =
+            unsafe { std::slice::from_raw_parts_mut(data_ptr, data.len()) };
+        Ok(Self {
+            phantom: PhantomData,
+            account_info,
+            data: data_slice,
+        })
+    }
+
+    pub fn reload(&mut self) -> Result<(), ProgramError> {
+        let mut reloaded_data = self.account_info.try_borrow_mut_data()?;
+        let reloaded_data_ptr = reloaded_data.as_mut_ptr();
+        let reloaded_data_slice: &'a mut [u8] =
+            unsafe { std::slice::from_raw_parts_mut(reloaded_data_ptr, reloaded_data.len()) };
+        self.data = reloaded_data_slice;
+        Ok(())
+    }
+
+    pub fn initialize_header(&mut self) {
+        let header =
+            bytemuck::from_bytes_mut::<AccountHeader>(&mut self.data[0..AccountHeader::size()]);
+        header.set::<T>();
+    }
+
+    pub fn initialize_account(
+        &mut self,
+        args: &T::ParsedInitializationData,
+    ) -> Result<(), ProgramError> {
+        self.initialize_header();
+        let data = self.data()?;
+        T::initialize_account(data, &args)?;
+        Ok(())
+    }
+
+    pub fn verify_payload<'b>(
+        &mut self,
+        instructions_sysvar_account: &Instructions<Ref<'b, [u8]>>,
+        extra_verification_data: &T::ParsedVerificationData,
+        payload: &[u8],
+    ) -> Result<(), ProgramError> {
+        let data = self.data()?;
+        T::verify_payload(
+            data,
+            instructions_sysvar_account,
+            extra_verification_data,
+            payload,
+        )?;
+        Ok(())
+    }
+
+    pub fn verfiy_initialization_payload<'b>(
+        &mut self,
+        instructions_sysvar_account: &Instructions<Ref<'b, [u8]>>,
+        initialization_data: &T::ParsedInitializationData,
+        payload: &[u8],
+    ) -> Result<(), ProgramError> {
+        let data = self.data()?;
+        T::verfiy_initialization_payload(
+            data,
+            instructions_sysvar_account,
+            initialization_data,
+            payload,
+        )
+    }
+
+    pub fn key(&self) -> &Pubkey {
+        self.account_info.key()
+    }
+
+    pub fn get_initialization_payload(&self) -> &'static [u8] {
+
+        T::get_initialization_payload()
+    }
+
+    pub fn get_execution_account(&self) -> ExecutionAccount<'a> {
+        let (execution_account, bump) =
+            try_find_program_address(&[self.account_info.key(), b"execution_account"], &crate::ID)
+                .unwrap();
+        let account_info_key = self.account_info.key();
+        ExecutionAccount {
+            key: execution_account,
+            bump,
+            seeds: [account_info_key.as_ref(), b"execution_account"],
+        }
+    }
+
+    pub fn size() -> usize {
+        core::mem::size_of::<T>()
+    }
+
+    pub fn header(&self) -> &mut AccountHeader {
+        // Since we know ExternallyOwnedAccountMut is a mutable reference, we
+        // can safely return a mutable reference to the header
+        let data_ptr = self.data as *const [u8] as *mut [u8];
+        unsafe {
+            bytemuck::from_bytes_mut::<AccountHeader>(&mut (*data_ptr)[0..AccountHeader::size()])
+        }
+    }
+
+    pub fn derive_account(args: T::DeriveAccountArgs) -> Result<T::AccountSeeds, ProgramError> {
+        T::derive_account(args)
+    }
+
+    pub fn check_account(
+        &self,
+        args: &T::ParsedVerificationData,
+    ) -> Result<T::AccountSeeds, ProgramError> {
+        let data = self.data()?;
+        T::check_account(&data, self.account_info, args)
+    }
+    pub fn data(&self) -> Result<&'a mut T, ProgramError> {
+        let header = self.header();
+
+        if header.version() != T::version() || header.scheme() != T::scheme() {
+            return Err(ExternalSignatureProgramError::ErrorDeserializingHeader.into());
+        }
+        if self.data.len() < T::size() {
+            return Err(ExternalSignatureProgramError::ErrorDeserializingAccountData.into());
+        }
+        // Since we know ExternallyOwnedAccountMut is a mutable reference, we
+        // can safely return a mutable reference to the data
+        let data_ptr = self.data as *const [u8] as *mut [u8];
+        unsafe {
+            Ok(
+                bytemuck::try_from_bytes_mut::<T>(&mut (*data_ptr)[..T::size()])
+                    .map_err(|_| ExternalSignatureProgramError::ErrorDeserializingAccountData)?,
+            )
+        }
+    }
+}

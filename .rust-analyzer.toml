@@ -1,0 +1,2 @@
+[rust-analyzer]
+cargo.features = ["bpf-entrypoint"]

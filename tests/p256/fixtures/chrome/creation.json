@@ -1,0 +1,15 @@
+{
+  "authenticatorAttachment": "platform",
+  "id": "WOP1Cjn-ASXK7FtMkXmv2TkrYsvBL76CAdaRSX-6nTE",
+  "rawId": "WOP1Cjn-ASXK7FtMkXmv2TkrYsvBL76CAdaRSX-6nTE",
+  "response": {
+    "attestationObject": "o2NmbXRmcGFja2VkZ2F0dFN0bXSiY2FsZyZjc2lnWEcwRQIhAJynyLnDxxYKVrkeONg5n7YSVC60Y6ylhV772qRcw04xAiBcK31NJDJH-9xKHCbXvjHAz1fb560n6-KWHy-x-F2J4GhhdXRoRGF0YVikPpZrl-Wqt-OFfBpyy2SraN1m7LT0GZORwGA7-6ujYkNFAAAAALU5dmZIhaprzr_lImKkOaIAIFjj9Qo5_gElyuxbTJF5r9k5K2LLwS--ggHWkUl_up0xpQECAyYgASFYIC6cwl_roZ9cwRT27d0mpyuFVAqLvY_wJ44ge6jxddD0IlggnHMNUWz0unCmbDZx65k21D_jUnhGqnMnVFuUEOQ90b0",
+    "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uY3JlYXRlIiwiY2hhbGxlbmdlIjoiRmE4NHA5dlBRT0FkSmRRV2JFWHNCR3NPM2FjeWNSSGZxcks2WnJzMkdMRSIsIm9yaWdpbiI6Imh0dHBzOi8vd3d3LnBhc3NrZXlzLWRlYnVnZ2VyLmlvIiwiY3Jvc3NPcmlnaW4iOmZhbHNlfQ",
+    "transports": ["internal"],
+    "authenticatorData": "PpZrl-Wqt-OFfBpyy2SraN1m7LT0GZORwGA7-6ujYkNFAAAAALU5dmZIhaprzr_lImKkOaIAIFjj9Qo5_gElyuxbTJF5r9k5K2LLwS--ggHWkUl_up0xpQECAyYgASFYIC6cwl_roZ9cwRT27d0mpyuFVAqLvY_wJ44ge6jxddD0IlggnHMNUWz0unCmbDZx65k21D_jUnhGqnMnVFuUEOQ90b0",
+    "publicKey": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAELpzCX-uhn1zBFPbt3SanK4VUCou9j_AnjiB7qPF10PSccw1RbPS6cKZsNnHrmTbUP-NSeEaqcydUW5QQ5D3RvQ",
+    "publicKeyAlgorithm": -7
+  },
+  "type": "public-key",
+  "clientExtensionResults": {}
+}

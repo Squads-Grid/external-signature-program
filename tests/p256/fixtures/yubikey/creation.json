@@ -1,0 +1,13 @@
+{
+  "id": "UlQLOuHjZKlkpWkwYdBzRxbwc8XP7xUaKmk4mQbzpEfJmBNsLe9LDKEqQtph1wiW",
+  "rawId": "UlQLOuHjZKlkpWkwYdBzRxbwc8XP7xUaKmk4mQbzpEfJmBNsLe9LDKEqQtph1wiW",
+  "type": "public-key",
+  "authenticatorAttachment": "cross-platform",
+  "response": {
+    "authenticatorData": "PpZrl-Wqt-OFfBpyy2SraN1m7LT0GZORwGA7-6ujYkMFAAAABg",
+    "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiRmE4NHA5dlBRT0FkSmRRV2JFWHNCR3NPM2FjeWNSSGZxcks2WnJzMkdMRSIsIm9yaWdpbiI6Imh0dHBzOi8vd3d3LnBhc3NrZXlzLWRlYnVnZ2VyLmlvIiwiY3Jvc3NPcmlnaW4iOmZhbHNlLCJvdGhlcl9rZXlzX2Nhbl9iZV9hZGRlZF9oZXJlIjoiZG8gbm90IGNvbXBhcmUgY2xpZW50RGF0YUpTT04gYWdhaW5zdCBhIHRlbXBsYXRlLiBTZWUgaHR0cHM6Ly9nb28uZ2wveWFiUGV4In0",
+    "signature": "MEQCIHaAVJMktkbrX2M7H35219XcwcICX6lCi3mTzb8pMLobAiBGrI8N47DozfKzP4ke8LFZRh-wLT1KB0GyogohWOETPQ",
+    "userHandle": "03DX0uGKWfQ8ggqOTpSbqT1AWlT7gL3PbA0tjBrDtmk",
+    "publicKey": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEUlQLOuHjZKlkpWkwYSKKj8v5YahkTD0hhhwA00swSMzVyPKilwRzFzNlzU_TVtcCL_Kdx-9wtiAZ98qB1h0ntw"
+  }
+}
