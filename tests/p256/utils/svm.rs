@@ -49,7 +49,7 @@ pub fn create_and_send_svm_transaction(
 
 pub fn add_external_signature_program(svm: &mut LiteSVM) -> Pubkey {
     let program_id = Pubkey::new_from_array(PROGRAM_ID);
-    svm.add_program_from_file(program_id, "/Users/orion/Documents/GitHub/external-signature-program/target/deploy/external_signature_program.so").unwrap();
+    svm.add_program_from_file(program_id, "./target/deploy/external_signature_program.so").unwrap();
     program_id
 }
 
