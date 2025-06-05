@@ -14,6 +14,8 @@ use pinocchio::{seeds, ProgramResult};
 
 use super::p256_webauthn::P256WebauthnAccountData;
 
+use crate::instructions::refresh_session_key::RefreshSessionKeyArgs;
+
 /// Version and type header for all account data
 #[derive(Pod, Zeroable, Copy, Clone)]
 #[repr(C)]
@@ -146,6 +148,12 @@ impl<'a, T: ExternallyOwnedAccountData> ExternallyOwnedAccount<'a, T> {
         self.initialize_header();
         let data = self.data()?;
         T::initialize_account(data, &args)?;
+        Ok(())
+    }
+
+    pub fn update_session_key(&mut self, session_key: SessionKey) -> Result<(), ProgramError> {
+        let data = self.data()?;
+        T::update_session_key(data, session_key)?;
         Ok(())
     }
 

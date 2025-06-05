@@ -14,12 +14,10 @@ use pinocchio::{
 };
 
 use crate::{
-    errors::ExternalSignatureProgramError,
-    signatures::{
+    errors::ExternalSignatureProgramError, instructions::refresh_session_key::RefreshSessionKeyArgs, signatures::{
         reconstruct_client_data_json, AuthDataParser, AuthType, ClientDataJsonReconstructionParams,
         SignatureScheme,
-    },
-    utils::{hash, hashv, PrecompileParser, Secp256r1Precompile, SmallVec, HASH_LENGTH},
+    }, utils::{hash, hashv, PrecompileParser, Secp256r1Precompile, SmallVec, HASH_LENGTH}
 };
 
 use super::{AccountHeader, AccountSeedsTrait, ExternallyOwnedAccountData};
@@ -43,6 +41,7 @@ impl<'a> From<&'a P256WebauthnParsedVerificationData> for P256WebauthnDeriveAcco
         }
     }
 }
+
 #[derive(BorshDeserialize, BorshSerialize, Clone)]
 pub struct P256WebauthnRawInitializationData {
     pub rp_id: SmallVec<u8, u8>,
@@ -151,8 +150,10 @@ impl ExternallyOwnedAccountData for P256WebauthnAccountData {
         self.set_rp_id_info(args.rp_id_info);
         self.set_public_key(args.public_key);
         self.set_counter(args.counter);
+        self.set_session_key(args.session_key);
         Ok(())
     }
+
     fn derive_account<'a>(args: Self::DeriveAccountArgs) -> Result<AccountSeeds, ProgramError> {
         let public_key_hash = hash(&args.public_key);
         let seeds: [&[u8]; 2] = [b"passkey", &public_key_hash];
@@ -296,6 +297,10 @@ impl P256WebauthnAccountData {
 
     pub fn set_counter(&mut self, counter: u64) {
         self.counter = counter;
+    }
+
+    pub fn set_session_key(&mut self, session_key: SessionKey) {
+        self.session_key = session_key;
     }
 }
 
