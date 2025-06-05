@@ -33,14 +33,15 @@ use crate::{
 };
 
 pub struct ExecuteInstructionsContext<'a, T: ExternallyOwnedAccountData> {
-    pub external_account: ExternallyOwnedAccount<'a, T>,
+    pub external_account: Box<ExternallyOwnedAccount<'a, T>>,
     pub execution_account: ExecutionAccount<'a>,
     pub signature_scheme_specific_verification_data: T::ParsedVerificationData,
     pub instructions_sysvar_account: Box<Instructions<Ref<'a, [u8]>>>,
     pub slothash: [u8; 32],
     pub signer_account: &'a AccountInfo,
     pub instructions: Box<&'a [CompiledInstruction]>,
-    pub instruction_execution_accounts: &'a [AccountInfo],
+    pub instruction_execution_accounts: Box<&'a [AccountInfo]>,
+    pub instruction_execution_account_metas: Box<Vec<AccountMeta<'a>>>,
 }
 
 #[derive(BorshDeserialize, BorshSerialize)]
@@ -100,15 +101,30 @@ impl<'a, T: ExternallyOwnedAccountData> ExecuteInstructionsContext<'a, T> {
         let nonce_data =
             validate_nonce(slothashes_sysvar, &execution_args.slothash, signer_account)?;
 
+        let instruction_execution_account_metas = instruction_execution_accounts
+            .iter()
+            .map(
+                |account| match account.key() == &external_execution_account.key {
+                    // The execution account needs to be set to be a signer for the
+                    // later instruction execution
+                    true => AccountMeta::new(account.key(), account.is_writable(), true),
+                    _ => {
+                        AccountMeta::new(account.key(), account.is_writable(), account.is_signer())
+                    }
+                },
+            )
+            .collect();
+
         Ok(Self {
-            external_account,
+            external_account: Box::new(external_account),
             execution_account: external_execution_account,
             signature_scheme_specific_verification_data: parsed_verification_data,
             instructions_sysvar_account: Box::new(instructions_sysvar),
-            slothash: nonce_data.slothash,
             signer_account,
+            instruction_execution_accounts: Box::new(instruction_execution_accounts),
+            instruction_execution_account_metas: Box::new(instruction_execution_account_metas),
+            slothash: nonce_data.slothash,
             instructions: Box::new(execution_args.instructions.as_slice()),
-            instruction_execution_accounts,
         })
     }
 
@@ -139,12 +155,11 @@ pub fn process_execute_instructions(accounts: &[AccountInfo], data: &[u8]) -> Pr
     let signature_scheme = SignatureScheme::try_from_primitive(args.signature_scheme)
         .map_err(|_| ExternalSignatureProgramError::InvalidSignatureScheme)?;
 
-    // Move the entire context to the heap
-    let mut execution_context = Box::new(match signature_scheme {
+    let mut execution_context = match signature_scheme {
         SignatureScheme::P256Webauthn => {
             ExecuteInstructionsContext::<P256WebauthnAccountData>::load(accounts, &args)?
         }
-    });
+    };
 
     let instruction_execution_hash = execution_context.get_instruction_payload_hash();
 
@@ -154,34 +169,27 @@ pub fn process_execute_instructions(accounts: &[AccountInfo], data: &[u8]) -> Pr
         &instruction_execution_hash,
     )?;
 
-    // Use a single vector for all operations
-    let mut account_data = Vec::with_capacity(256);
-    let mut seen_indices: u64 = 0;
+    // Initialize containers for both data structures
+    let mut account_metas = Vec::with_capacity(256);
+    let mut account_info_indices = Vec::with_capacity(64);
 
     for instruction in args.instructions.iter() {
-        // Clear and reuse the vector
-        account_data.clear();
-        seen_indices = 0;
+        let mut seen_indices = [false; 64]; // A maximum of 64 account infos are allowed by the runtime
 
-        // First pass: collect unique account indices
+        // Build AccountMeta vector and collect unique indices in one pass
         for &index in instruction.accounts_indices.iter() {
-            if (seen_indices & (1 << index)) == 0 {
-                seen_indices |= 1 << index;
-                account_data.push(index);
+            account_metas.push(
+                execution_context.instruction_execution_account_metas[index as usize].clone(),
+            );
+            // Track unique indices for AccountInfo references
+            if !seen_indices[index as usize] {
+                seen_indices[index as usize] = true;
+                account_info_indices.push(index);
             }
         }
 
-        // Second pass: create account metas
-        let account_metas: Vec<AccountMeta> = instruction.accounts_indices
-            .iter()
-            .map(|&index| {
-                let account = &execution_context.instruction_execution_accounts[index as usize];
-                AccountMeta::new(account.key(), account.is_writable(), account.is_signer())
-            })
-            .collect();
-
-        // Third pass: create filtered account infos
-        let filtered_account_infos: Vec<&AccountInfo> = account_data
+        // Now create the filtered account infos using the unique indices
+        let filtered_account_infos: Vec<&AccountInfo> = account_info_indices
             .iter()
             .map(|&index| &execution_context.instruction_execution_accounts[index as usize])
             .collect();
@@ -201,6 +209,9 @@ pub fn process_execute_instructions(accounts: &[AccountInfo], data: &[u8]) -> Pr
                 &execution_context.execution_account.to_signer_seeds(),
             )],
         )?;
+
+        account_metas.clear();
+        account_info_indices.clear();
     }
     Ok(())
 }
