@@ -189,14 +189,12 @@ pub fn print_initialization_payload() {
     instruction_bytes.extend_from_slice(&nonce_signer.pubkey().to_bytes());
     instruction_bytes.extend_from_slice(b"initialize_passkey");
 
-    let instruction_bytes_base64 = general_purpose::URL_SAFE_NO_PAD.encode(&instruction_bytes);
-    //println!("instruction_bytes_base64: {:?}", instruction_bytes_base64);
     let mut hasher = Sha256::new();
     hasher.update(&instruction_bytes);
     let result = hasher.finalize();
 
-    //println!("instruction_hash_bytes: {:?}", result);
     let base64_url_encoded_instruction_hash = general_purpose::URL_SAFE_NO_PAD.encode(result);
+    
     println!(
         "challenge payload: {:?}",
         base64_url_encoded_instruction_hash

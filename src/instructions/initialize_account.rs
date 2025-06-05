@@ -6,7 +6,7 @@ use crate::{
         SignatureScheme,
     },
     state::{
-        AccountHeader, AccountSeedsTrait, CompressedP256PublicKey, DataAccess,
+        AccountHeader, AccountSeedsTrait, CompressedP256PublicKey,
         ExternallyOwnedAccount, ExternallyOwnedAccountData,
         P256WebauthnAccountData, RpIdInformation,
     },

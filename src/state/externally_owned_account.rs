@@ -2,6 +2,7 @@ use std::marker::PhantomData;
 
 use crate::errors::ExternalSignatureProgramError;
 use crate::signatures::SignatureScheme;
+use crate::state::SessionKey;
 use borsh::{BorshDeserialize, BorshSerialize};
 use bytemuck::{Pod, Zeroable};
 use pinocchio::account_info::{AccountInfo, Ref};
@@ -86,24 +87,10 @@ pub trait ExternallyOwnedAccountData: Pod + Zeroable + Copy + Clone {
         extra_verification_data: &Self::ParsedVerificationData,
         payload: &[u8],
     ) -> Result<(), ProgramError>;
+    fn is_valid_session_key(&self, signer: &Pubkey) -> Result<bool, ProgramError>;
+    fn update_session_key(&mut self, session_key: SessionKey) -> Result<(), ProgramError>;
 }
 
-pub trait DataAccess<'a, T: ExternallyOwnedAccountData> {
-    type HeaderType;
-    type DataOutput;
-
-    fn key(&self) -> &Pubkey;
-    fn size() -> usize;
-    fn header(&self) -> Self::HeaderType;
-    fn get_initialization_payload(&self) -> &'static [u8];
-    fn check_account(
-        &self,
-        args: &T::ParsedVerificationData,
-    ) -> Result<T::AccountSeeds, ProgramError>;
-    fn derive_account(args: T::DeriveAccountArgs) -> Result<T::AccountSeeds, ProgramError>;
-    fn data(&self) -> Result<Self::DataOutput, ProgramError>;
-    fn get_execution_account(&self) -> ExecutionAccount<'a>;
-}
 pub struct ExecutionAccount<'a> {
     pub key: Pubkey,
     pub bump: u8,

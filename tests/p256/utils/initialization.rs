@@ -67,6 +67,7 @@ pub fn initialize_passkey_account(
         rp_id: SmallVec::<u8,u8>::from(rp_id.to_vec()),
         public_key: public_key.as_slice().try_into().unwrap(),
         client_data_json_reconstruction_params: webauthn_data.client_data_json_reconstruction_params.into(),
+        session_key: None,
     };
     let initialize_args = InitializeAccountArgs {
         slothash: slot_num.clone(),

@@ -28,7 +28,7 @@ use pinocchio::{
 use crate::{
     errors::ExternalSignatureProgramError,
     signatures::SignatureScheme,
-    state::{DataAccess, ExternallyOwnedAccountData, P256WebauthnAccountData},
+    state::{ExternallyOwnedAccountData, P256WebauthnAccountData},
     utils::SmallVec,
 };
 

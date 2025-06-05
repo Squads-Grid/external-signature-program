@@ -9,7 +9,7 @@ use pinocchio::{
     program_error::ProgramError,
     pubkey::{try_find_program_address, Pubkey},
     seeds,
-    sysvars::instructions::Instructions,
+    sysvars::{clock::Clock, instructions::Instructions, Sysvar},
     ProgramResult,
 };
 
@@ -48,6 +48,14 @@ pub struct P256WebauthnRawInitializationData {
     pub rp_id: SmallVec<u8, u8>,
     pub public_key: [u8; 33],
     pub client_data_json_reconstruction_params: ClientDataJsonReconstructionParams,
+    pub session_key: Option<SessionKey>,
+}
+
+#[derive(BorshDeserialize, BorshSerialize, Clone, Copy, Zeroable, Pod, Default)]
+#[repr(C)]
+pub struct SessionKey {
+    pub key: Pubkey,
+    pub expiration: u64, 
 }
 
 impl From<P256WebauthnRawInitializationData> for P256WebauthnParsedInitializationData {
@@ -58,6 +66,7 @@ impl From<P256WebauthnRawInitializationData> for P256WebauthnParsedInitializatio
             public_key: CompressedP256PublicKey::new(&data.public_key),
             counter: 0,
             client_data_json_reconstruction_params: data.client_data_json_reconstruction_params,
+            session_key: data.session_key.unwrap_or_default(),
         }
     }
 }
@@ -66,6 +75,7 @@ pub struct P256WebauthnParsedInitializationData {
     pub public_key: CompressedP256PublicKey,
     pub counter: u64,
     pub client_data_json_reconstruction_params: ClientDataJsonReconstructionParams,
+    pub session_key: SessionKey,
 }
 
 #[derive(BorshDeserialize, BorshSerialize, Clone)]
@@ -241,6 +251,16 @@ impl ExternallyOwnedAccountData for P256WebauthnAccountData {
         self.verify_payload(instructions_sysvar_account, &verification_args, payload)?;
         Ok(())
     }
+
+    fn is_valid_session_key(&self, signer: &Pubkey) -> Result<bool, ProgramError> {
+        let clock = Clock::get()?;
+        Ok(self.session_key.key == *signer && self.session_key.expiration > clock.slot)
+    }
+
+    fn update_session_key(&mut self, session_key: SessionKey) -> Result<(), ProgramError> {
+        self.session_key = session_key;
+        Ok(())
+    }
 }
 
 /// P-256 (secp256r1) account data
@@ -255,9 +275,12 @@ pub struct P256WebauthnAccountData {
 
     /// P-256 public key
     pub public_key: CompressedP256PublicKey,
-
+ 
     /// Padding to ensure alignment
     pub padding: [u8; 2],
+
+    /// Session key
+    pub session_key: SessionKey,
 
     // Webauthn signature counter (used mostly by security keys)
     pub counter: u64,
