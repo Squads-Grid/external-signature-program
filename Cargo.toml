@@ -10,7 +10,7 @@ program-id = "ExtSgUPtP3JyKUysFw2S5fpL5fWfUPzGUQLd2bTwftXN"
 crate-type = ["cdylib", "lib"]
 
 [dependencies]
-pinocchio = "0.8.1"
+pinocchio = "0.8.4"
 bytemuck = { version = "1.21.0", features = ["derive"] }
 pinocchio-log = "0.4.0"
 pinocchio-system = "0.2.2"
