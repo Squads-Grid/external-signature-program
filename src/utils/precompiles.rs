@@ -95,7 +95,8 @@ pub struct PrecompileParser<'a, T: PrecompileInfo> {
     _marker: std::marker::PhantomData<T>,
 }
 
-pub fn get_data_slice<'a>(data: &'a [u8], offset: usize, size: usize) -> &'a [u8] {
+pub fn get_data_slice<'a>(data: &'a [u8], offset: usize, size: usize) -> &'a [u8] 
+{
     &data[offset as usize..offset as usize + size as usize]
 }
 
@@ -157,7 +158,7 @@ impl<'a, 'b, T: PrecompileInfo> PrecompileParser<'a, T> {
                     _ => {
                         let instruction = self.instructions_sysvar.load_instruction_at(offset.signature_instruction_index as usize).map_err(|_| ExternalSignatureProgramError::InvalidSignatureOffset)?;
                         let ix_data = instruction.get_instruction_data();
-                        get_data_slice(ix_data, offset.signature_offset as usize, T::get_signature_size())
+                        get_data_slice_raw(ix_data, offset.signature_offset as usize, T::get_signature_size())
                     }
                 };
                 let public_key = match offset.public_key_instruction_index {
@@ -167,7 +168,7 @@ impl<'a, 'b, T: PrecompileInfo> PrecompileParser<'a, T> {
                     _ => {
                         let instruction = self.instructions_sysvar.load_instruction_at(offset.public_key_instruction_index as usize).map_err(|_| ExternalSignatureProgramError::InvalidSignatureOffset)?;
                         let ix_data = instruction.get_instruction_data();
-                        get_data_slice(ix_data, offset.public_key_offset as usize, T::get_public_key_size())
+                        get_data_slice_raw(ix_data, offset.public_key_offset as usize, T::get_public_key_size())
                     }
                 };
                 let message = match offset.message_instruction_index {
@@ -177,7 +178,7 @@ impl<'a, 'b, T: PrecompileInfo> PrecompileParser<'a, T> {
                     _ => {
                         let instruction = self.instructions_sysvar.load_instruction_at(offset.message_instruction_index as usize).map_err(|_| ExternalSignatureProgramError::InvalidSignatureOffset)?;
                         let ix_data = instruction.get_instruction_data();
-                        get_data_slice(ix_data, offset.message_data_offset as usize, offset.message_data_size as usize)
+                        get_data_slice_raw(ix_data, offset.message_data_offset as usize, offset.message_data_size as usize)
                     }
                 };
                 SignaturePayload {
