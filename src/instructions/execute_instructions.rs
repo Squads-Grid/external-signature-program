@@ -63,7 +63,7 @@ impl<'a, T: ExternallyOwnedAccountData> ExecuteInstructionsContext<'a, T> {
     pub fn load(
         account_infos: &'a [AccountInfo],
         execution_args: &'a ExecutableInstructionArgs,
-    ) -> Result<Self, ProgramError> {
+    ) -> Result<Box<Self>, ProgramError> {
         let (
             external_account,
             instructions_sysvar,
@@ -115,7 +115,7 @@ impl<'a, T: ExternallyOwnedAccountData> ExecuteInstructionsContext<'a, T> {
             )
             .collect();
 
-        Ok(Self {
+        Ok(Box::new(Self {
             external_account: Box::new(external_account),
             execution_account: external_execution_account,
             signature_scheme_specific_verification_data: parsed_verification_data,
@@ -125,7 +125,7 @@ impl<'a, T: ExternallyOwnedAccountData> ExecuteInstructionsContext<'a, T> {
             instruction_execution_account_metas: Box::new(instruction_execution_account_metas),
             slothash: nonce_data.slothash,
             instructions: Box::new(execution_args.instructions.as_slice()),
-        })
+        }))
     }
 
     pub fn get_instruction_payload_hash(&self) -> [u8; 32] {
