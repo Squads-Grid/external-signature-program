@@ -1,9 +1,5 @@
-use base64::{
-    engine::{self, general_purpose},
-    Engine,
-};
+use base64::{engine::general_purpose, Engine};
 use borsh::{BorshDeserialize, BorshSerialize};
-use pinocchio::{log::sol_log_compute_units, msg, pubkey::Pubkey};
 
 /// Minimal representation for reconstructing clientDataJson
 #[derive(Clone, Copy, Debug, BorshDeserialize, BorshSerialize)]
@@ -141,7 +137,7 @@ pub fn reconstruct_client_data_json(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use base64::{engine::general_purpose, Engine as _};
+    use base64::engine::general_purpose;
 
     #[test]
     fn test_reconstruct_client_data_json() {

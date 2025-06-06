@@ -1,12 +1,22 @@
 use base64::{engine::general_purpose, Engine};
-use borsh::{BorshDeserialize, BorshSerialize};
-use bytemuck::{Pod, Zeroable};
 use pinocchio::{
     account_info::{AccountInfo, Ref},
     log::sol_log,
     program_error::ProgramError,
     pubkey::{try_find_program_address, Pubkey},
     sysvars::{clock::Clock, instructions::Instructions, Sysvar},
+};
+
+use crate::{
+    errors::ExternalSignatureProgramError,
+    signatures::{reconstruct_client_data_json, AuthDataParser, SignatureScheme},
+    state::{
+        AccountSeeds, ExternallyOwnedAccountData, P256WebauthnAccountData,
+        P256WebauthnDeriveAccountArgs, P256WebauthnParsedInitializationData,
+        P256WebauthnParsedVerificationData, P256WebauthnRawInitializationData,
+        P256WebauthnRawVerificationData, SessionKey,
+    },
+    utils::{hash, PrecompileParser, Secp256r1Precompile},
 };
 
 impl ExternallyOwnedAccountData for P256WebauthnAccountData {

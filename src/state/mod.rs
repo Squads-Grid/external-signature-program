@@ -1,5 +1,5 @@
 mod externally_owned_account;
-mod p256;
+mod p256_webauthn;
 
 pub use externally_owned_account::*;
-pub use p256::*;
+pub use p256_webauthn::*;

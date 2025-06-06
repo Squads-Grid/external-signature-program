@@ -1,26 +1,15 @@
-use std::cmp::max;
-
 use crate::{
     checks::nonce::{validate_nonce, TruncatedSlot},
-    errors::assert_with_msg,
-    signatures::{
-        reconstruct_client_data_json, AuthDataParser, AuthType, ClientDataJsonReconstructionParams,
-    },
     state::{ExecutionAccount, ExternallyOwnedAccount},
-    utils::{hashv, sha256::hash, SlotHash, SlotHashes},
+    utils::{hash, SlotHashes},
 };
-use base64::{engine::general_purpose, Engine};
 use borsh::{BorshDeserialize, BorshSerialize};
-use bytemuck::{Pod, Zeroable};
 use num_enum::TryFromPrimitive;
 use pinocchio::{
     account_info::{AccountInfo, Ref},
     cpi::slice_invoke_signed,
     instruction::{AccountMeta, Instruction, Signer},
-    log::sol_log_compute_units,
-    msg,
     program_error::ProgramError,
-    syscalls::sol_remaining_compute_units,
     sysvars::instructions::Instructions,
     ProgramResult,
 };

@@ -1,8 +1,12 @@
+use pinocchio::pubkey::Pubkey;
+
+use crate::state::AccountSeedsTrait;
+
 pub struct AccountSeeds {
     pub key: Pubkey,
     pub bump: u8,
-    seed_passkey: &'static [u8],
-    seed_public_key_hash: [u8; 32],
+    pub(crate) seed_passkey: &'static [u8],
+    pub(crate) seed_public_key_hash: [u8; 32],
 }
 
 impl AccountSeedsTrait for AccountSeeds {

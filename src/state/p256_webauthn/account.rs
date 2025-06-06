@@ -1,3 +1,9 @@
+use bytemuck::{Pod, Zeroable};
+
+use crate::{
+    state::{AccountHeader, SessionKey},
+    utils::HASH_LENGTH,
+};
 
 /// P-256 (secp256r1) account data
 #[derive(Pod, Zeroable, Copy, Clone)]
