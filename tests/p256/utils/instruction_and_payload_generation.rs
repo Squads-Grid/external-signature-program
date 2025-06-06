@@ -4,8 +4,7 @@ use base64::{
 };
 use borsh::BorshSerialize;
 use external_signature_program::{
-    instructions::execute_instructions::CompiledInstruction as ExternalCompiledInstruction,
-    utils::SmallVec, ID as PROGRAM_ID,
+    instructions::execute_instructions::CompiledInstruction as ExternalCompiledInstruction, state::SessionKey, utils::SmallVec, ID as PROGRAM_ID
 };
 use serde::Serialize;
 use sha2::{Digest, Sha256};
@@ -194,7 +193,42 @@ pub fn print_initialization_payload() {
     let result = hasher.finalize();
 
     let base64_url_encoded_instruction_hash = general_purpose::URL_SAFE_NO_PAD.encode(result);
-    
+
+    println!(
+        "challenge payload: {:?}",
+        base64_url_encoded_instruction_hash
+    );
+}
+
+#[test]
+pub fn print_session_key_payload() {
+    let nonce_signer = Keypair::read_from_file(
+        "tests/p256/keypairs/sinf1bu1CMQaMzeDoysAU7dAp2gs5j2V3vM9W5ZXAyB.json",
+    )
+    .unwrap();
+
+    let session_key = Keypair::read_from_file(
+        "tests/p256/keypairs/sesfSDjioiWGpxqSoHSfMGrQe3wAyEBDSAL3niVecdC.json",
+    )
+    .unwrap();
+    let (svm, _) = initialize_svm(vec![nonce_signer.pubkey()]);
+    let (hash, _) = get_valid_slothash(&svm);
+
+    let session_key = SessionKey {
+        key: session_key.pubkey().to_bytes(),
+        expiration: 900, // 15 minutes in seconds
+    };
+    let mut instruction_bytes: Vec<u8> = Vec::new();
+    instruction_bytes.extend_from_slice(&hash);
+    instruction_bytes.extend_from_slice(&nonce_signer.pubkey().to_bytes());
+    session_key.serialize(&mut instruction_bytes).unwrap();
+
+    let mut hasher = Sha256::new();
+    hasher.update(&instruction_bytes);
+    let result = hasher.finalize();
+
+    let base64_url_encoded_instruction_hash = general_purpose::URL_SAFE_NO_PAD.encode(result);
+
     println!(
         "challenge payload: {:?}",
         base64_url_encoded_instruction_hash
