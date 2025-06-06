@@ -1,40 +1,25 @@
-use crate::{
-    checks::nonce::{validate_nonce, TruncatedSlot},
-    errors::{assert_with_msg, ExternalSignatureProgramError},
-    signatures::{
-        auth_data, client_data_json, AuthDataParser, AuthType, ClientDataJsonReconstructionParams,
-        SignatureScheme,
-    },
-    state::{
-        AccountHeader, AccountSeedsTrait, CompressedP256PublicKey,
-        ExternallyOwnedAccount, ExternallyOwnedAccountData,
-        P256WebauthnAccountData, RpIdInformation,
-    },
-    utils::{hash, sha256::hashv, PrecompileParser, Secp256r1Precompile, SlotHashes, SmallVec},
-};
 use borsh::{BorshDeserialize, BorshSerialize};
 use num_enum::TryFromPrimitive;
 use pinocchio::{
     account_info::{AccountInfo, Ref},
     instruction::{Seed, Signer},
-    log::{sol_log_64, sol_log_compute_units, sol_log_data},
-    msg,
     program_error::ProgramError,
-    pubkey::{try_find_program_address, Pubkey},
-    seeds, syscalls,
-    sysvars::{
-        instructions::{Instructions, INSTRUCTIONS_ID},
-        rent::Rent,
-        Sysvar,
-    },
+    sysvars::{instructions::Instructions, rent::Rent, Sysvar},
     ProgramResult,
 };
 use pinocchio_system::instructions::{Allocate, Assign, Transfer};
 
-pub const INITIALIZATION_CHALLENGE: [u8; 18] = [
-    105, 110, 105, 116, 105, 97, 108, 105, 122, 101, 95, 112, 97, 115, 115, 107, 101, 121,
-];
-pub const bytes: &[u8] = b"initialize_passkey";
+use crate::{
+    checks::nonce::{validate_nonce, TruncatedSlot},
+    errors::ExternalSignatureProgramError,
+    signatures::SignatureScheme,
+    state::{
+        AccountSeedsTrait, ExternallyOwnedAccount, ExternallyOwnedAccountData,
+        P256WebauthnAccountData,
+    },
+    utils::{hash, SlotHashes, SmallVec},
+};
+
 pub struct InitializeAccounts<'a> {
     // [MUT]
     pub external_account: &'a AccountInfo,

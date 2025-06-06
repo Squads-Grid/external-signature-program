@@ -1,20 +1,18 @@
 use std::marker::PhantomData;
 
-use crate::errors::ExternalSignatureProgramError;
-use crate::signatures::SignatureScheme;
-use crate::state::SessionKey;
-use borsh::{BorshDeserialize, BorshSerialize};
+use borsh::BorshDeserialize;
 use bytemuck::{Pod, Zeroable};
-use pinocchio::account_info::{AccountInfo, Ref};
-use pinocchio::instruction::{Seed, Signer};
-use pinocchio::program_error::ProgramError;
-use pinocchio::pubkey::{try_find_program_address, Pubkey};
-use pinocchio::sysvars::instructions::Instructions;
-use pinocchio::{seeds, ProgramResult};
+use pinocchio::{
+    account_info::{AccountInfo, Ref},
+    instruction::Seed,
+    program_error::ProgramError,
+    pubkey::{try_find_program_address, Pubkey},
+    seeds,
+    sysvars::instructions::Instructions,
+};
 
-use super::p256_webauthn::P256WebauthnAccountData;
-
-use crate::instructions::refresh_session_key::RefreshSessionKeyArgs;
+use crate::errors::ExternalSignatureProgramError;
+use crate::state::SessionKey;
 
 /// Version and type header for all account data
 #[derive(Pod, Zeroable, Copy, Clone)]
@@ -33,12 +31,7 @@ impl AccountHeader {
     pub fn size() -> usize {
         core::mem::size_of::<AccountHeader>()
     }
-    pub fn version(&self) -> u8 {
-        self.version
-    }
-    pub fn scheme(&self) -> u8 {
-        self.scheme
-    }
+
     pub fn set<T: ExternallyOwnedAccountData>(&mut self) {
         self.version = T::version();
         self.scheme = T::scheme();
@@ -193,7 +186,6 @@ impl<'a, T: ExternallyOwnedAccountData> ExternallyOwnedAccount<'a, T> {
     }
 
     pub fn get_initialization_payload(&self) -> &'static [u8] {
-
         T::get_initialization_payload()
     }
 
@@ -236,7 +228,7 @@ impl<'a, T: ExternallyOwnedAccountData> ExternallyOwnedAccount<'a, T> {
     pub fn data(&self) -> Result<&'a mut T, ProgramError> {
         let header = self.header();
 
-        if header.version() != T::version() || header.scheme() != T::scheme() {
+        if header.version != T::version() || header.scheme != T::scheme() {
             return Err(ExternalSignatureProgramError::ErrorDeserializingHeader.into());
         }
         if self.data.len() < T::size() {
