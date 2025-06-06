@@ -46,6 +46,12 @@ pub enum ExternalSignatureProgramError {
     InvalidExtraVerificationDataArgs,
     #[error("Invalid execution args")]
     InvalidExecutionArgs,
+    #[error("Session signer is not a signer")]
+    SessionSignerNotASigner,
+    #[error("Invalid session key")]
+    InvalidSessionKey,
+    #[error("Session key expired")]
+    SessionKeyExpired,
 
     /// Signature Scheme Related Errors
     #[error("Invalid signature scheme")]

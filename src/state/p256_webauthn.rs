@@ -14,10 +14,13 @@ use pinocchio::{
 };
 
 use crate::{
-    errors::ExternalSignatureProgramError, instructions::refresh_session_key::RefreshSessionKeyArgs, signatures::{
+    errors::ExternalSignatureProgramError,
+    instructions::refresh_session_key::RefreshSessionKeyArgs,
+    signatures::{
         reconstruct_client_data_json, AuthDataParser, AuthType, ClientDataJsonReconstructionParams,
         SignatureScheme,
-    }, utils::{hash, hashv, PrecompileParser, Secp256r1Precompile, SmallVec, HASH_LENGTH}
+    },
+    utils::{hash, hashv, PrecompileParser, Secp256r1Precompile, SmallVec, HASH_LENGTH},
 };
 
 use super::{AccountHeader, AccountSeedsTrait, ExternallyOwnedAccountData};
@@ -54,7 +57,7 @@ pub struct P256WebauthnRawInitializationData {
 #[repr(C)]
 pub struct SessionKey {
     pub key: Pubkey,
-    pub expiration: u64, 
+    pub expiration: u64,
 }
 
 impl From<P256WebauthnRawInitializationData> for P256WebauthnParsedInitializationData {
@@ -253,9 +256,15 @@ impl ExternallyOwnedAccountData for P256WebauthnAccountData {
         Ok(())
     }
 
-    fn is_valid_session_key(&self, signer: &Pubkey) -> Result<bool, ProgramError> {
+    fn is_valid_session_key(&self, signer: &Pubkey) -> Result<(), ProgramError> {
         let clock = Clock::get()?;
-        Ok(self.session_key.key == *signer && self.session_key.expiration > clock.slot)
+        if self.session_key.key != *signer {
+            return Err(ExternalSignatureProgramError::InvalidSessionKey.into());
+        }
+        if self.session_key.expiration < clock.slot {
+            return Err(ExternalSignatureProgramError::SessionKeyExpired.into());
+        }
+        Ok(())
     }
 
     fn update_session_key(&mut self, session_key: SessionKey) -> Result<(), ProgramError> {
@@ -276,7 +285,7 @@ pub struct P256WebauthnAccountData {
 
     /// P-256 public key
     pub public_key: CompressedP256PublicKey,
- 
+
     /// Padding to ensure alignment
     pub padding: [u8; 2],
 

@@ -1,12 +1,18 @@
-use std::error::Error;
+use std::{
+    error::Error,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
-use external_signature_program::{checks::nonce::TruncatedSlot, errors::ExternalSignatureProgramError, ID as PROGRAM_ID};
+use external_signature_program::{
+    checks::nonce::TruncatedSlot, errors::ExternalSignatureProgramError, ID as PROGRAM_ID,
+};
 use litesvm::{types::FailedTransactionMetadata, LiteSVM};
 use sha2::{Digest, Sha256};
 use solana_hash::Hash;
 use solana_keypair::Keypair;
 use solana_message::Message;
 use solana_program::{
+    clock::Clock,
     instruction::{Instruction, InstructionError},
     native_token::LAMPORTS_PER_SOL,
 };
@@ -27,7 +33,10 @@ pub fn create_and_send_svm_transaction(
     let result = svm.send_transaction(tx);
     match &result {
         Ok(tx) => {
-            println!("CUs consumed: {:?}, Signature: {:?}", tx.compute_units_consumed, tx.signature);
+            println!(
+                "CUs consumed: {:?}, Signature: {:?}",
+                tx.compute_units_consumed, tx.signature
+            );
         }
         Err(e) => {
             let error = &e.err;
@@ -49,7 +58,8 @@ pub fn create_and_send_svm_transaction(
 
 pub fn add_external_signature_program(svm: &mut LiteSVM) -> Pubkey {
     let program_id = Pubkey::new_from_array(PROGRAM_ID);
-    svm.add_program_from_file(program_id, "./target/deploy/external_signature_program.so").unwrap();
+    svm.add_program_from_file(program_id, "./target/deploy/external_signature_program.so")
+        .unwrap();
     program_id
 }
 
@@ -60,6 +70,12 @@ pub fn initialize_svm(airdrop_keys: Vec<Pubkey>) -> (LiteSVM, Pubkey) {
     }
     let program_id = add_external_signature_program(&mut svm);
     set_slothash_sysvar(&mut svm);
+    let mut clock = svm.get_sysvar::<Clock>();
+    clock.unix_timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as i64;
+    svm.set_sysvar::<Clock>(&clock);
     (svm, program_id)
 }
 

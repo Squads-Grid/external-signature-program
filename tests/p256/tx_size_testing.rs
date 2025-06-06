@@ -6,7 +6,7 @@ use borsh::BorshSerialize;
 use external_signature_program::{
     checks::nonce::TruncatedSlot,
     errors::ExternalSignatureProgramError,
-    instructions::execute_instructions::{CompiledInstruction, ExecutableInstructionArgs},
+    instructions::execute_instructions::native::{CompiledInstruction, ExecutableInstructionArgs},
     signatures::{p256_webauthn::ClientDataJsonReconstructionParams, AuthType},
     state::P256WebauthnRawVerificationData,
     utils::{SmallVec, SLOT_HASHES_ID},

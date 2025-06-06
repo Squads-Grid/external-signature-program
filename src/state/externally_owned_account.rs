@@ -89,7 +89,7 @@ pub trait ExternallyOwnedAccountData: Pod + Zeroable + Copy + Clone {
         extra_verification_data: &Self::ParsedVerificationData,
         payload: &[u8],
     ) -> Result<(), ProgramError>;
-    fn is_valid_session_key(&self, signer: &Pubkey) -> Result<bool, ProgramError>;
+    fn is_valid_session_key(&self, signer: &Pubkey) -> Result<(), ProgramError>;
     fn update_session_key(&mut self, session_key: SessionKey) -> Result<(), ProgramError>;
 }
 
@@ -149,6 +149,11 @@ impl<'a, T: ExternallyOwnedAccountData> ExternallyOwnedAccount<'a, T> {
         let data = self.data()?;
         T::initialize_account(data, &args)?;
         Ok(())
+    }
+
+    pub fn is_valid_session_key(&self, signer: &Pubkey) -> Result<(), ProgramError> {
+        let data = self.data()?;
+        T::is_valid_session_key(data, signer)
     }
 
     pub fn update_session_key(&mut self, session_key: SessionKey) -> Result<(), ProgramError> {

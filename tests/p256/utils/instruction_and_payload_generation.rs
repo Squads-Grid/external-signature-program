@@ -4,7 +4,7 @@ use base64::{
 };
 use borsh::BorshSerialize;
 use external_signature_program::{
-    instructions::execute_instructions::CompiledInstruction as ExternalCompiledInstruction, state::SessionKey, utils::SmallVec, ID as PROGRAM_ID
+    instructions::execute_instructions::native::CompiledInstruction as ExternalCompiledInstruction, state::SessionKey, utils::SmallVec, ID as PROGRAM_ID
 };
 use serde::Serialize;
 use sha2::{Digest, Sha256};
@@ -16,10 +16,10 @@ use solana_sdk_ids::system_program;
 use solana_signer::{EncodableKey, Signer};
 use std::{fs, str::FromStr};
 
-use crate::p256::utils::{
+use crate::{p256::utils::{
     parser::parse_webauthn_fixture,
     svm::{get_valid_slothash, initialize_svm},
-};
+}, refresh_session_key::TESTING_SESSION_KEY};
 
 pub fn get_execution_account(account: Pubkey, program_id: Pubkey) -> Pubkey {
     let (execution_account, _bump) =
@@ -214,14 +214,11 @@ pub fn print_session_key_payload() {
     let (svm, _) = initialize_svm(vec![nonce_signer.pubkey()]);
     let (hash, _) = get_valid_slothash(&svm);
 
-    let session_key = SessionKey {
-        key: session_key.pubkey().to_bytes(),
-        expiration: 900, // 15 minutes in seconds
-    };
+
     let mut instruction_bytes: Vec<u8> = Vec::new();
     instruction_bytes.extend_from_slice(&hash);
     instruction_bytes.extend_from_slice(&nonce_signer.pubkey().to_bytes());
-    session_key.serialize(&mut instruction_bytes).unwrap();
+    TESTING_SESSION_KEY.serialize(&mut instruction_bytes).unwrap();
 
     let mut hasher = Sha256::new();
     hasher.update(&instruction_bytes);

@@ -3,7 +3,7 @@ use num_enum::TryFromPrimitive;
 use pinocchio::{
     account_info::{AccountInfo, Ref},
     program_error::ProgramError,
-    sysvars::instructions::Instructions,
+    sysvars::{clock::Clock, instructions::Instructions, Sysvar},
     ProgramResult,
 };
 
@@ -21,8 +21,8 @@ pub struct RefreshSessionKeyAccounts<'a> {
     // [MUT]
     pub external_account: &'a AccountInfo,
     pub instructions_sysvar: &'a AccountInfo,
-    pub nonce_signer: &'a AccountInfo,
     pub slothashes_sysvar: &'a AccountInfo,
+    pub nonce_signer: &'a AccountInfo,
 }
 
 pub struct RefreshSessionKeyContext<'a, T: ExternallyOwnedAccountData> {
@@ -31,6 +31,7 @@ pub struct RefreshSessionKeyContext<'a, T: ExternallyOwnedAccountData> {
     pub signature_scheme_specific_verification_data: T::ParsedVerificationData,
     pub session_key: SessionKey,
     pub slothash: [u8; 32],
+    pub signer_account: &'a AccountInfo,
 }
 
 #[derive(BorshDeserialize, BorshSerialize)]
@@ -46,15 +47,15 @@ impl<'a, T: ExternallyOwnedAccountData> RefreshSessionKeyContext<'a, T> {
         account_infos: &'a [AccountInfo],
         args: &'a RefreshSessionKeyArgs,
     ) -> Result<Box<Self>, ProgramError> {
-        let (external_account, instructions_sysvar, nonce_signer, slothashes_sysvar, _remaining) =
-            if let [external_account, instructions_sysvar, nonce_signer, slothashes_sysvar, remaining @ ..] =
+        let (external_account, instructions_sysvar, slothashes_sysvar, nonce_signer, _remaining) =
+            if let [external_account, instructions_sysvar, slothashes_sysvar, nonce_signer, remaining @ ..] =
                 account_infos
             {
                 (
                     external_account,
                     instructions_sysvar,
-                    nonce_signer,
                     slothashes_sysvar,
+                    nonce_signer,
                     remaining,
                 )
             } else {
@@ -78,13 +79,14 @@ impl<'a, T: ExternallyOwnedAccountData> RefreshSessionKeyContext<'a, T> {
             signature_scheme_specific_verification_data: parsed_verification_data,
             session_key: args.session_key,
             slothash: nonce_data.slothash,
+            signer_account: &nonce_signer,
         }))
     }
 
     pub fn get_refresh_session_key_payload_hash(&self) -> [u8; 32] {
         let mut refresh_session_key_payload: Vec<u8> = Vec::with_capacity(104);
         refresh_session_key_payload.extend_from_slice(self.slothash.as_slice());
-        refresh_session_key_payload.extend_from_slice(self.external_account.key().as_ref());
+        refresh_session_key_payload.extend_from_slice(self.signer_account.key().as_ref());
 
         self.session_key
             .serialize(&mut refresh_session_key_payload)
@@ -116,9 +118,14 @@ pub fn process_refresh_session_key(accounts: &[AccountInfo], data: &[u8]) -> Pro
             &signature_specific_refresh_session_key_payload,
         )?;
 
+    let session_key_expiration = Clock::get()?.unix_timestamp + args.session_key.expiration as i64;
+    let session_key = SessionKey {
+        key: args.session_key.key,
+        expiration: session_key_expiration as u64,
+    };
     refresh_session_key_context
         .external_account
-        .update_session_key(args.session_key)?;
+        .update_session_key(session_key)?;
 
     Ok(())
 }
