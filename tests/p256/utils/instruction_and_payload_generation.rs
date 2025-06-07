@@ -4,7 +4,7 @@ use base64::{
 };
 use borsh::BorshSerialize;
 use external_signature_program::{
-    instructions::execute_instructions::native::CompiledInstruction as ExternalCompiledInstruction, state::SessionKey, utils::SmallVec, ID as PROGRAM_ID
+    instructions::execute_instructions::shared::CompiledInstruction as ExternalCompiledInstruction, state::SessionKey, utils::SmallVec, ID as PROGRAM_ID
 };
 use serde::Serialize;
 use sha2::{Digest, Sha256};

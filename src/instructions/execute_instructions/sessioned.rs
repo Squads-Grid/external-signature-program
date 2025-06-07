@@ -32,6 +32,8 @@ use crate::{
     utils::SmallVec,
 };
 
+use super::shared::CompiledInstruction;
+
 // TODO: Rename
 pub struct ExecuteInstructionsContext<'a, T: ExternallyOwnedAccountData> {
     pub external_account: Box<ExternallyOwnedAccount<'a, T>>,
@@ -48,13 +50,6 @@ pub struct ExecutableInstructionArgs {
     pub instructions: SmallVec<u8, CompiledInstruction>,
 }
 
-// TODO: Put in shared file
-#[derive(BorshDeserialize, BorshSerialize)]
-pub struct CompiledInstruction {
-    pub program_id_index: u8,
-    pub accounts_indices: SmallVec<u8, u8>,
-    pub data: SmallVec<u16, u8>,
-}
 
 impl<'a, T: ExternallyOwnedAccountData> ExecuteInstructionsContext<'a, T> {
     pub fn load(

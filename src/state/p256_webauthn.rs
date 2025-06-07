@@ -261,9 +261,11 @@ impl ExternallyOwnedAccountData for P256WebauthnAccountData {
         if self.session_key.key != *signer {
             return Err(ExternalSignatureProgramError::InvalidSessionKey.into());
         }
-        if self.session_key.expiration < clock.slot {
+        if self.session_key.expiration < clock.unix_timestamp as u64 {
             return Err(ExternalSignatureProgramError::SessionKeyExpired.into());
         }
+        sol_log(format!("Session Key Expiration: {:?}", self.session_key.expiration).as_str());
+        sol_log(format!("Clock Timestamp: {:?}", clock.unix_timestamp).as_str());
         Ok(())
     }
 

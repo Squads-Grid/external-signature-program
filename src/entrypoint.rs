@@ -1,9 +1,11 @@
 use crate::allocator::BumpAllocator;
 use crate::instructions::*;
 use execute_instructions::native::process_execute_instructions;
+use execute_instructions::sessioned::process_execute_instructions as process_execute_instructions_sessioned;
 use initialize_account::process_initialize_account;
 use pinocchio::{
-    account_info::AccountInfo, nostd_panic_handler, entrypoint::HEAP_START_ADDRESS, log, msg, program_entrypoint, program_error::ProgramError, pubkey::Pubkey, ProgramResult
+    account_info::AccountInfo, entrypoint::HEAP_START_ADDRESS, log, msg, nostd_panic_handler,
+    program_entrypoint, program_error::ProgramError, pubkey::Pubkey, ProgramResult,
 };
 use refresh_session_key::process_refresh_session_key;
 
@@ -43,7 +45,7 @@ pub fn process_instruction(
         }
         // 3 - Verify Message
         3 => {
-            verify::process_verify(accounts, instruction_data)?;
+            process_execute_instructions_sessioned(accounts, instruction_data)?;
         }
         _ => return Err(ProgramError::InvalidInstructionData),
     }

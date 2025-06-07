@@ -9,20 +9,23 @@ use crate::{
     refresh_session_key::{refresh_session_key, TESTING_SESSION_KEY},
 };
 use external_signature_program::state::P256WebauthnAccountData;
+use litesvm::LiteSVM;
 use solana_keypair::Keypair;
+use solana_pubkey::Pubkey;
 use solana_signer::{EncodableKey, Signer};
 
-fn test_authentication_from_fixture(create_account_path: &str, refresh_session_key_path: &str) {
-    let payer = Keypair::read_from_file(
-        "tests/p256/keypairs/sinf1bu1CMQaMzeDoysAU7dAp2gs5j2V3vM9W5ZXAyB.json",
-    )
-    .unwrap();
+pub struct AccountSessionAuthentication {
+    pub svm: LiteSVM,
+    pub account_pubkey: Pubkey,
+    pub passkey_pubkey: [u8; 33],
+}
+pub fn test_session_authentication_from_fixture(payer: &Keypair, create_account_path: &str, refresh_session_key_path: &str) -> Result<AccountSessionAuthentication, Box<dyn std::error::Error>> {
     let (mut svm, program_id) = initialize_svm(vec![payer.pubkey()]);
 
     let (hash, truncated_slot) = get_valid_slothash(&svm);
     println!("Hash: {:?}", hash);
     // Get the passkey account and instructions from our abstracted function
-    let (account_pubkey, _public_key, instructions) = initialize_passkey_account(
+    let (account_pubkey, public_key, instructions) = initialize_passkey_account(
         create_account_path,
         &payer.pubkey(),
         &truncated_slot,
@@ -36,7 +39,6 @@ fn test_authentication_from_fixture(create_account_path: &str, refresh_session_k
     // Create and submit the transaction
     create_and_send_svm_transaction(&mut svm, instructions, &payer.pubkey(), vec![&payer]).unwrap();
 
-    println!("Account created");
     // Verify the account was properly created
     let account = svm.get_account(&account_pubkey).unwrap();
     assert_eq!(account.data.len() > 0, true);
@@ -56,7 +58,7 @@ fn test_authentication_from_fixture(create_account_path: &str, refresh_session_k
     let account = svm.get_account(&account_pubkey).unwrap();
     let account_data: &P256WebauthnAccountData = bytemuck::from_bytes(&account.data);
 
-    println!("account_data: {:#?}", account_data.session_key.expiration);
+    println!("Session Key Expiration: {:#?}", account_data.session_key.expiration);
     // get the current system time in seconds
     let current_time = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -66,6 +68,12 @@ fn test_authentication_from_fixture(create_account_path: &str, refresh_session_k
     let expected_expiration = current_time + 900;
     assert_eq!(account_data.session_key.expiration, expected_expiration);
     assert_eq!(account_data.session_key.key, TESTING_SESSION_KEY.key);
+
+    Ok(AccountSessionAuthentication {
+        svm,
+        account_pubkey,
+        passkey_pubkey: account_data.public_key.to_bytes(),
+    })
 }
 
 #[cfg(test)]
@@ -74,7 +82,11 @@ mod test_authentication {
 
     #[test]
     fn test_yubikey_authentication() {
-        test_authentication_from_fixture(
+        let payer =
+        Keypair::read_from_file("tests/p256/keypairs/sinf1bu1CMQaMzeDoysAU7dAp2gs5j2V3vM9W5ZXAyB.json")
+            .unwrap();
+        let _ = test_session_authentication_from_fixture(
+            &payer,
             "tests/p256/fixtures/yubikey/creation.json",
             "tests/p256/fixtures/yubikey/authentication.json",
         );
@@ -82,7 +94,11 @@ mod test_authentication {
 
     #[test]
     fn test_chrome_authentication() {
-        test_authentication_from_fixture(
+        let payer =
+        Keypair::read_from_file("tests/p256/keypairs/sinf1bu1CMQaMzeDoysAU7dAp2gs5j2V3vM9W5ZXAyB.json")
+            .unwrap();
+        let _ = test_session_authentication_from_fixture(
+            &payer,
             "tests/p256/fixtures/chrome/creation.json",
             "tests/p256/fixtures/chrome/session_key_authentication.json",
         );
@@ -90,9 +106,13 @@ mod test_authentication {
 
     #[test]
     fn test_one_password_authentication() {
-        test_authentication_from_fixture(
+        let payer =
+        Keypair::read_from_file("tests/p256/keypairs/sinf1bu1CMQaMzeDoysAU7dAp2gs5j2V3vM9W5ZXAyB.json")
+            .unwrap();
+        let _ = test_session_authentication_from_fixture(
+            &payer,
             "tests/p256/fixtures/one-password/creation.json",
-            "tests/p256/fixtures/one-password/authentication.json",
+            "tests/p256/fixtures/one-password/session_key_authentication.json",
         );
     }
 }

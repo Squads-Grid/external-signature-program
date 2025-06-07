@@ -6,3 +6,4 @@ pub mod secp256r1_instruction;
 pub mod initialization;
 pub mod authentication;
 pub mod refresh_session_key;
+pub mod execute_sessioned_instructions;

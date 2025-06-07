@@ -26,7 +26,7 @@ pub fn create_and_send_svm_transaction(
     instructions: Vec<Instruction>,
     payer: &Pubkey,
     signers: Vec<&Keypair>,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<(), FailedTransactionMetadata> {
     let blockhash = svm.latest_blockhash();
     let message = Message::new_with_blockhash(&instructions, Some(&payer), &blockhash);
     let tx = Transaction::new(&signers, message, blockhash);
@@ -39,21 +39,42 @@ pub fn create_and_send_svm_transaction(
             );
         }
         Err(e) => {
-            let error = &e.err;
-            match error {
-                TransactionError::InstructionError(_, InstructionError::Custom(value)) => {
-                    let custom_error = ExternalSignatureProgramError::try_from(value.clone());
-                    println!("Rejected transaction: {:#?}", result);
-                    println!("Potential error: {:#?}", custom_error);
-                }
-                _ => {
-                    println!("Rejected transaction: {:#?}", result);
-                }
-            }
-            panic!("Transaction rejected");
+            return Err((*e).clone());
         }
     }
     Ok(())
+}
+
+pub fn create_and_assert_svm_transaction(
+    svm: &mut LiteSVM,
+    instructions: Vec<Instruction>,
+    payer: &Pubkey,
+    signers: Vec<&Keypair>,
+    expected_error: Option<ExternalSignatureProgramError>,
+) -> Result<(), FailedTransactionMetadata> {
+    let result = create_and_send_svm_transaction(svm, instructions, payer, signers);
+
+    match (result, expected_error) {
+        (Ok(_), None) => Ok(()),
+        (Ok(_), Some(_)) => panic!("Expected error but transaction succeeded"),
+        (Err(error), None) => panic!("Unexpected error: {:?}", error),
+        (Err(error), Some(expected)) => match error.err {
+            TransactionError::InstructionError(_, InstructionError::Custom(value)) => {
+                match ExternalSignatureProgramError::try_from(value.clone()) {
+                    Ok(actual_error) => {
+                        assert_eq!(
+                            actual_error, expected,
+                            "Expected error {:?} but got {:?}",
+                            expected, actual_error
+                        );
+                        Ok(())
+                    }
+                    Err(_) => panic!("Failed to parse custom error: {:?}", error),
+                }
+            }
+            _ => panic!("Unexpected error type: {:?}", error),
+        },
+    }
 }
 
 pub fn add_external_signature_program(svm: &mut LiteSVM) -> Pubkey {
