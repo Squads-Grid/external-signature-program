@@ -59,6 +59,7 @@ impl ExternallyOwnedAccountData for P256WebauthnAccountData {
         let public_key_hash = hash(&args.public_key);
         let seeds: [&[u8]; 2] = [b"passkey", &public_key_hash];
         let (derived_key, bump) = try_find_program_address(&seeds, &crate::ID).unwrap();
+
         Ok(AccountSeeds {
             key: derived_key,
             bump,
@@ -70,14 +71,12 @@ impl ExternallyOwnedAccountData for P256WebauthnAccountData {
     fn check_account<'a>(
         &self,
         account_info: &AccountInfo,
-        _args: &Self::ParsedVerificationData,
+        args: &Self::ParsedVerificationData,
     ) -> Result<Self::AccountSeeds, ProgramError> {
         if !account_info.is_writable() {
             return Err(ExternalSignatureProgramError::AccountNotWritable.into());
         }
-        let derive_args = Self::DeriveAccountArgs {
-            public_key: self.public_key.to_bytes(),
-        };
+        let derive_args = Self::DeriveAccountArgs::from(args);
         let account_seeds = Self::derive_account(derive_args)?;
         if account_seeds.key.ne(account_info.key()) {
             return Err(ProgramError::InvalidAccountOwner);

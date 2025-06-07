@@ -55,7 +55,7 @@ impl CompressedP256PublicKey {
 pub struct RpIdInformation {
     pub rp_id_len: u8,
     pub rp_id: [u8; 32],
-    pub rp_id_hash: [u8; 32],
+    pub rp_id_hash: [u8; HASH_LENGTH],
 }
 
 impl RpIdInformation {
@@ -67,7 +67,7 @@ impl RpIdInformation {
                 fixed_rp_id[..rp_id.len()].copy_from_slice(&rp_id);
                 fixed_rp_id
             },
-            rp_id_hash: rp_id_hash,
+            rp_id_hash,
         }
     }
 }

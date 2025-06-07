@@ -138,8 +138,11 @@ impl<'a, T: ExternallyOwnedAccountData> AccountInitializationContext<'a, T> {
         &self,
         signature_specific_initialization_payload: &'b [u8],
     ) -> [u8; 32] {
-        let mut payload_bytes =
-            Vec::with_capacity(signature_specific_initialization_payload.len() + 32 + 32);
+        let mut payload_bytes = Vec::with_capacity(
+            signature_specific_initialization_payload.len() // length of signature specific initialization payload
+                + 32 // length of slothash
+                + 32, // length of rent payer key
+        );
         payload_bytes.extend_from_slice(&self.slothash);
         payload_bytes.extend_from_slice(self.rent_payer.key());
         payload_bytes.extend_from_slice(&signature_specific_initialization_payload);
@@ -155,7 +158,6 @@ pub struct InitializeAccountArgs {
 }
 
 pub fn process_initialize_account(accounts: &[AccountInfo], data: &[u8]) -> ProgramResult {
-    //let initialization_data = InitializeAccountData::try_from(data)?;
     let initialization_data =
         InitializeAccountArgs::try_from_slice(data).map_err(|_| ProgramError::InvalidArgument)?;
     let signature_scheme =
@@ -171,12 +173,15 @@ pub fn process_initialize_account(accounts: &[AccountInfo], data: &[u8]) -> Prog
         }
     };
 
+    // get init payload (i.e. b"initialize_passkey")
     let signature_specific_initialization_payload = initialization_context
         .external_account
         .get_initialization_payload();
+    // hash the init payload, slothash, and rent payer key
     let initialization_payload_hash = initialization_context
         .get_initialization_payload_hash(signature_specific_initialization_payload);
 
+    // create and allocate the externally owned account
     initialization_context.create_and_allocate_account()?;
 
     let mut externally_owned_account = initialization_context.external_account;

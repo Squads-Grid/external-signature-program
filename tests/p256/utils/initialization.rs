@@ -1,24 +1,22 @@
-use base64::{engine::general_purpose, Engine as _};
-use borsh::{ BorshDeserialize, to_vec };
-use external_signature_program::{checks::nonce::TruncatedSlot, instructions::initialize_account::InitializeAccountArgs, signatures::SignatureScheme, state::P256WebauthnRawInitializationData, utils::{SmallVec, SLOT_HASHES_ID}, ID as PROGRAM_ID};
-use litesvm::LiteSVM;
-use pinocchio::{pubkey::try_find_program_address, sysvars::instructions::INSTRUCTIONS_ID};
-use solana_keypair::Keypair;
-use solana_message::Message;
+use borsh::to_vec;
+use external_signature_program::{
+    checks::nonce::TruncatedSlot,
+    instructions::initialize_account::InitializeAccountArgs,
+    signatures::SignatureScheme,
+    state::P256WebauthnRawInitializationData,
+    utils::{SmallVec, SLOT_HASHES_ID},
+};
+use pinocchio::sysvars::instructions::INSTRUCTIONS_ID;
 use solana_program::{
     instruction::{AccountMeta, Instruction},
     pubkey::Pubkey,
     system_program::ID as SYSTEM_PROGRAM_ID,
 };
-use solana_signer::Signer;
-use solana_transaction::Transaction;
 use std::fs;
-use crate::p256::utils::{
-    parser::parse_webauthn_fixture,
-    secp256r1_instruction::new_secp256r1_instruction,
-    svm::{create_and_send_svm_transaction, initialize_svm},
-};
 
+use crate::p256::utils::{
+    parser::parse_webauthn_fixture, secp256r1_instruction::new_secp256r1_instruction,
+};
 
 /// Returns a tuple containing:
 /// 1. The pubkey of the initialized account
@@ -28,7 +26,7 @@ pub fn initialize_passkey_account(
     payer: &Pubkey,
     slot_num: &TruncatedSlot,
     program_id: &Pubkey,
-) -> Result<(Pubkey,Vec<u8>, Vec<Instruction>), Box<dyn std::error::Error>> {
+) -> Result<(Pubkey, Vec<u8>, Vec<Instruction>), Box<dyn std::error::Error>> {
     // Read and parse the WebAuthn fixture
     let json_data = fs::read_to_string(fixture_path)?;
     let webauthn_data = parse_webauthn_fixture(&json_data)?;
@@ -64,15 +62,17 @@ pub fn initialize_passkey_account(
 
     // Construct the initialization instruction data
     let p256_webauthn_args = P256WebauthnRawInitializationData {
-        rp_id: SmallVec::<u8,u8>::from(rp_id.to_vec()),
+        rp_id: SmallVec::<u8, u8>::from(rp_id.to_vec()),
         public_key: public_key.as_slice().try_into().unwrap(),
-        client_data_json_reconstruction_params: webauthn_data.client_data_json_reconstruction_params.into(),
+        client_data_json_reconstruction_params: webauthn_data
+            .client_data_json_reconstruction_params,
         session_key: None,
     };
     let initialize_args = InitializeAccountArgs {
         slothash: slot_num.clone(),
         signature_scheme: SignatureScheme::P256Webauthn.into(),
-        initialization_data: SmallVec::<u8,u8>::try_from(to_vec(&p256_webauthn_args).unwrap()).unwrap(),
+        initialization_data: SmallVec::<u8, u8>::try_from(to_vec(&p256_webauthn_args).unwrap())
+            .unwrap(),
     };
 
     let mut instruction_data = Vec::with_capacity(1 + 1 + public_key.len() + 1 + rp_id.len());
