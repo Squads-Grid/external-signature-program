@@ -1,5 +1,7 @@
 use std::convert::TryInto;
 
+use crate::errors::ExternalSignatureProgramError;
+
 pub struct AuthDataParser<'a> {
     auth_data: &'a [u8],
 }
@@ -26,7 +28,7 @@ impl<'a> AuthDataParser<'a> {
         u32::from_be_bytes(self.auth_data[33..37].try_into().unwrap())
     }
 
-pub fn verify_and_parse_public_key(&self) -> Result<[u8; 33], &'static str> {
+pub fn verify_and_parse_public_key(&self) -> Result<[u8; 33], ExternalSignatureProgramError> {
     // Parse credential data sections
     let attested_cred_data_start = 37; // rpIdHash(32) + flags(1) + counter(4)
     let aaguid_length = 16;
@@ -44,7 +46,7 @@ pub fn verify_and_parse_public_key(&self) -> Result<[u8; 33], &'static str> {
 
     // We expect CBOR to start with a map (0xa#) where # is the number of items
     if cbor_start >= self.auth_data.len() || (self.auth_data[cbor_start] & 0xF0) != 0xA0 {
-        return Err("Invalid CBOR format for public key");
+        return Err(ExternalSignatureProgramError::InvalidPublicKeyEncoding);
     }
 
     // Check for algorithm (-7)
@@ -58,7 +60,7 @@ pub fn verify_and_parse_public_key(&self) -> Result<[u8; 33], &'static str> {
     }
 
     if !alg_found {
-        return Err("Algorithm is not ES256 (-7)");
+        return Err(ExternalSignatureProgramError::InvalidAlgorithm);
     }
 
     // Find the x-coordinate by looking for key -2 (0x21) followed by byte string marker (0x58 0x20)
@@ -81,7 +83,7 @@ pub fn verify_and_parse_public_key(&self) -> Result<[u8; 33], &'static str> {
 
     // Verify we found the coordinates
     if x_start == 0 || y_start == 0 || x_start + 32 > self.auth_data.len() || y_start + 32 > self.auth_data.len() {
-        return Err("Could not locate x and y coordinates");
+        return Err(ExternalSignatureProgramError::InvalidPublicKeyEncoding);
     }
 
     // Extract x coordinate

@@ -4,6 +4,7 @@ pub mod account_session_authentication;
 pub mod account_sessioned_execution;
 pub mod utils;
 pub mod tx_size_testing;
+pub mod auth_data_validation;
 
 pub use account_initialization::*;
 pub use account_authentication::*;

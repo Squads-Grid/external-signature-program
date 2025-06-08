@@ -64,6 +64,10 @@ pub enum ExternalSignatureProgramError {
     ClientDataHashMismatch,
     #[error("Account is not writable")]
     AccountNotWritable,
+    #[error("Invalid passkey Algorithm")]
+    InvalidAlgorithm,
+    #[error("Invalid public key encoding")]
+    InvalidPublicKeyEncoding,
 }
 
 impl From<ExternalSignatureProgramError> for ProgramError {

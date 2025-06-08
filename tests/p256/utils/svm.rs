@@ -64,8 +64,8 @@ pub fn create_and_assert_svm_transaction(
                     Ok(actual_error) => {
                         assert_eq!(
                             actual_error, expected,
-                            "Expected error {:?} but got {:?}",
-                            expected, actual_error
+                            "Expected error {:?} but got {:?} /n Error: {:?}",
+                            expected, actual_error, error
                         );
                         Ok(())
                     }
