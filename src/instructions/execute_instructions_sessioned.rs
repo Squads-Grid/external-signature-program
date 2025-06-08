@@ -1,71 +1,47 @@
-
-use crate::{
-    state::{ExecutionAccount, ExternallySignedAccount, SignatureScheme},
-    utils::{nonce::{validate_nonce, TruncatedSlot}, sha256::hash, SlotHashes},
-};
 use borsh::{BorshDeserialize, BorshSerialize};
 use num_enum::TryFromPrimitive;
 use pinocchio::{
-    account_info::{AccountInfo, Ref},
+    account_info::AccountInfo,
     cpi::slice_invoke_signed,
     instruction::{AccountMeta, Instruction, Signer},
     program_error::ProgramError,
-    sysvars::instructions::Instructions,
     ProgramResult,
 };
 
 use crate::{
     errors::ExternalSignatureProgramError,
+    instructions::CompiledInstruction,
+    state::{ExecutionAccount, ExternallySignedAccount, SignatureScheme},
     state::{ExternallySignedAccountData, P256WebauthnAccountData},
     utils::SmallVec,
 };
 
-pub struct ExecuteInstructionsContext<'a, T: ExternallySignedAccountData> {
+pub struct ExecuteInstructionsSessionedContext<'a, T: ExternallySignedAccountData> {
     pub external_account: Box<ExternallySignedAccount<'a, T>>,
     pub execution_account: ExecutionAccount<'a>,
-    pub signature_scheme_specific_verification_data: T::ParsedVerificationData,
-    pub instructions_sysvar_account: Box<Instructions<Ref<'a, [u8]>>>,
-    pub slothash: [u8; 32],
-    pub signer_account: &'a AccountInfo,
+    pub session_signer: &'a AccountInfo,
     pub instructions: Box<&'a [CompiledInstruction]>,
     pub instruction_execution_accounts: Box<&'a [AccountInfo]>,
     pub instruction_execution_account_metas: Box<Vec<AccountMeta<'a>>>,
 }
 
 #[derive(BorshDeserialize, BorshSerialize)]
-pub struct ExecutableInstructionArgs {
+pub struct ExecutableInstructionSessionedArgs {
     pub signature_scheme: u8,
-    pub slothash: TruncatedSlot,
-    pub extra_verification_data: SmallVec<u8, u8>,
     pub instructions: SmallVec<u8, CompiledInstruction>,
 }
 
-#[derive(BorshDeserialize, BorshSerialize)]
-pub struct CompiledInstruction {
-    pub program_id_index: u8,
-    pub accounts_indices: SmallVec<u8, u8>,
-    pub data: SmallVec<u16, u8>,
-}
-
-impl<'a, T: ExternallySignedAccountData> ExecuteInstructionsContext<'a, T> {
+impl<'a, T: ExternallySignedAccountData> ExecuteInstructionsSessionedContext<'a, T> {
     pub fn load(
         account_infos: &'a [AccountInfo],
-        execution_args: &'a ExecutableInstructionArgs,
+        execution_args: &'a ExecutableInstructionSessionedArgs,
     ) -> Result<Box<Self>, ProgramError> {
-        let (
-            external_account,
-            instructions_sysvar,
-            slothashes_sysvar,
-            signer_account,
-            instruction_execution_accounts,
-        ) = if let [external_account, instructions_sysvar, slothashes_sysvar, signer_account, instruction_execution_accounts @ ..] =
+        let (external_account, session_signer, instruction_execution_accounts) = if let [external_account, session_signer, instruction_execution_accounts @ ..] =
             account_infos
         {
             (
                 external_account,
-                instructions_sysvar,
-                slothashes_sysvar,
-                signer_account,
+                session_signer,
                 instruction_execution_accounts,
             )
         } else {
@@ -74,18 +50,10 @@ impl<'a, T: ExternallySignedAccountData> ExecuteInstructionsContext<'a, T> {
 
         let external_account = ExternallySignedAccount::<T>::new(external_account)?;
         let external_execution_account = external_account.get_execution_account();
-        let args = T::RawVerificationData::try_from_slice(
-            &execution_args.extra_verification_data.as_slice(),
-        )
-        .map_err(|_| ExternalSignatureProgramError::InvalidExtraVerificationDataArgs)?;
-        let parsed_verification_data = T::ParsedVerificationData::from(args);
-        external_account.check_account(&parsed_verification_data)?;
 
-        let instructions_sysvar = Instructions::try_from(instructions_sysvar)?;
-        let slothashes_sysvar = SlotHashes::try_from(slothashes_sysvar)?;
-
-        let nonce_data =
-            validate_nonce(slothashes_sysvar, &execution_args.slothash, signer_account)?;
+        if !session_signer.is_signer() {
+            return Err(ExternalSignatureProgramError::SessionSignerNotASigner.into());
+        }
 
         let instruction_execution_account_metas = instruction_execution_accounts
             .iter()
@@ -104,56 +72,33 @@ impl<'a, T: ExternallySignedAccountData> ExecuteInstructionsContext<'a, T> {
         Ok(Box::new(Self {
             external_account: Box::new(external_account),
             execution_account: external_execution_account,
-            signature_scheme_specific_verification_data: parsed_verification_data,
-            instructions_sysvar_account: Box::new(instructions_sysvar),
-            signer_account,
+            session_signer,
             instruction_execution_accounts: Box::new(instruction_execution_accounts),
             instruction_execution_account_metas: Box::new(instruction_execution_account_metas),
-            slothash: nonce_data.slothash,
             instructions: Box::new(execution_args.instructions.as_slice()),
         }))
     }
-
-    pub fn get_instruction_payload_hash(&self) -> [u8; 32] {
-        let mut instruction_payload: Vec<u8> = Vec::new();
-        instruction_payload.extend_from_slice(self.slothash.as_slice());
-        instruction_payload.extend_from_slice(self.signer_account.key().as_ref());
-
-        self.instruction_execution_accounts
-            .iter()
-            .for_each(|account| {
-                instruction_payload.extend_from_slice(account.key().as_ref());
-                instruction_payload.push(account.is_signer() as u8);
-                instruction_payload.push(account.is_writable() as u8);
-            });
-        instruction_payload.push(self.instructions.len() as u8);
-        for instruction in self.instructions.iter() {
-            instruction.serialize(&mut instruction_payload).unwrap();
-        }
-        //self.instructions.serialize(&mut instruction_payload).unwrap();
-        hash(&instruction_payload)
-    }
 }
 
-pub fn process_execute_instructions(accounts: &[AccountInfo], data: &[u8]) -> ProgramResult {
-    let args = ExecutableInstructionArgs::try_from_slice(data)
+pub fn process_execute_instructions_sessioned(
+    accounts: &[AccountInfo],
+    data: &[u8],
+) -> ProgramResult {
+    let args = ExecutableInstructionSessionedArgs::try_from_slice(data)
         .map_err(|_| ExternalSignatureProgramError::InvalidExecutionArgs)?;
     let signature_scheme = SignatureScheme::try_from_primitive(args.signature_scheme)
         .map_err(|_| ExternalSignatureProgramError::InvalidSignatureScheme)?;
 
-    let mut execution_context = match signature_scheme {
+    let execution_context = match signature_scheme {
         SignatureScheme::P256Webauthn => {
-            ExecuteInstructionsContext::<P256WebauthnAccountData>::load(accounts, &args)?
+            ExecuteInstructionsSessionedContext::<P256WebauthnAccountData>::load(accounts, &args)?
         }
     };
 
-    let instruction_execution_hash = execution_context.get_instruction_payload_hash();
-
-    execution_context.external_account.verify_payload(
-        &execution_context.instructions_sysvar_account,
-        &execution_context.signature_scheme_specific_verification_data,
-        &instruction_execution_hash,
-    )?;
+    // Check that the session is valid
+    execution_context
+        .external_account
+        .is_valid_session_key(execution_context.session_signer.key())?;
 
     // Initialize containers for both data structures
     let mut account_metas = Vec::with_capacity(256);

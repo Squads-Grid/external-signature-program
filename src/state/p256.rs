@@ -3,62 +3,43 @@ use borsh::{BorshDeserialize, BorshSerialize};
 use bytemuck::{Pod, Zeroable};
 use pinocchio::{
     account_info::{AccountInfo, Ref},
-    instruction::{Seed, Signer},
     log::sol_log,
-    msg,
     program_error::ProgramError,
     pubkey::{try_find_program_address, Pubkey},
-    seeds,
     sysvars::{clock::Clock, instructions::Instructions, Sysvar},
-    ProgramResult,
 };
 
 use crate::{
-    errors::ExternalSignatureProgramError, instructions::refresh_session_key::RefreshSessionKeyArgs, signatures::{
-        reconstruct_client_data_json, AuthDataParser, AuthType, ClientDataJsonReconstructionParams,
-        SignatureScheme,
-    }, utils::{hash, hashv, PrecompileParser, Secp256r1Precompile, SmallVec, HASH_LENGTH}
+    errors::ExternalSignatureProgramError,
+    signatures::{
+        reconstruct_client_data_json, AuthDataParser, ClientDataJsonReconstructionParams,
+    },
+    state::{
+        AccountHeader, AccountSeedsTrait, ExternallySignedAccountData, SessionKey, SignatureScheme,
+    },
+    utils::{hash, PrecompileParser, Secp256r1Precompile, SmallVec, HASH_LENGTH},
 };
 
-use super::{AccountHeader, AccountSeedsTrait, ExternallyOwnedAccountData};
-
-pub struct P256WebauthnDeriveAccountArgs {
-    pub public_key: [u8; 33],
-}
-
-impl<'a> From<&'a P256WebauthnParsedInitializationData> for P256WebauthnDeriveAccountArgs {
-    fn from(data: &P256WebauthnParsedInitializationData) -> Self {
-        Self {
-            public_key: data.public_key.to_bytes(),
-        }
-    }
-}
-
-impl<'a> From<&'a P256WebauthnParsedVerificationData> for P256WebauthnDeriveAccountArgs {
-    fn from(data: &P256WebauthnParsedVerificationData) -> Self {
-        Self {
-            public_key: data.public_key.to_bytes(),
-        }
-    }
-}
-
 #[derive(BorshDeserialize, BorshSerialize, Clone)]
-pub struct P256WebauthnRawInitializationData {
+pub struct P256RawInitializationData {
     pub rp_id: SmallVec<u8, u8>,
     pub public_key: [u8; 33],
     pub client_data_json_reconstruction_params: ClientDataJsonReconstructionParams,
     pub session_key: Option<SessionKey>,
 }
 
-#[derive(BorshDeserialize, BorshSerialize, Clone, Copy, Zeroable, Pod, Default)]
+#[derive(BorshDeserialize, BorshSerialize, Clone, Copy)]
 #[repr(C)]
-pub struct SessionKey {
-    pub key: Pubkey,
-    pub expiration: u64, 
+pub struct P256ParsedInitializationData {
+    pub rp_id_info: RpIdInformation,
+    pub public_key: CompressedP256PublicKey,
+    pub counter: u64,
+    pub client_data_json_reconstruction_params: ClientDataJsonReconstructionParams,
+    pub session_key: SessionKey,
 }
 
-impl From<P256WebauthnRawInitializationData> for P256WebauthnParsedInitializationData {
-    fn from(data: P256WebauthnRawInitializationData) -> Self {
+impl From<P256RawInitializationData> for P256ParsedInitializationData {
+    fn from(data: P256RawInitializationData) -> Self {
         let rp_id_hash = hash(&data.rp_id.as_slice());
         Self {
             rp_id_info: RpIdInformation::new(data.rp_id.as_slice(), rp_id_hash),
@@ -69,31 +50,112 @@ impl From<P256WebauthnRawInitializationData> for P256WebauthnParsedInitializatio
         }
     }
 }
-pub struct P256WebauthnParsedInitializationData {
-    pub rp_id_info: RpIdInformation,
-    pub public_key: CompressedP256PublicKey,
-    pub counter: u64,
-    pub client_data_json_reconstruction_params: ClientDataJsonReconstructionParams,
-    pub session_key: SessionKey,
-}
 
 #[derive(BorshDeserialize, BorshSerialize, Clone)]
-pub struct P256WebauthnRawVerificationData {
+pub struct P256RawVerificationData {
     pub public_key: [u8; 33],
     pub client_data_json_reconstruction_params: ClientDataJsonReconstructionParams,
 }
 
-impl From<P256WebauthnRawVerificationData> for P256WebauthnParsedVerificationData {
-    fn from(data: P256WebauthnRawVerificationData) -> Self {
+#[derive(BorshDeserialize, BorshSerialize, Clone)]
+pub struct P256ParsedVerificationData {
+    pub public_key: CompressedP256PublicKey,
+    pub client_data_json_reconstruction_params: ClientDataJsonReconstructionParams,
+}
+
+impl From<P256RawVerificationData> for P256ParsedVerificationData {
+    fn from(data: P256RawVerificationData) -> Self {
         Self {
             public_key: CompressedP256PublicKey::new(&data.public_key),
             client_data_json_reconstruction_params: data.client_data_json_reconstruction_params,
         }
     }
 }
-pub struct P256WebauthnParsedVerificationData {
+
+/// P-256 (secp256r1) account data
+#[derive(Pod, Zeroable, Copy, Clone)]
+#[repr(C)]
+pub struct P256WebauthnAccountData {
+    /// Exists here purely for alignment
+    _header: AccountHeader,
+
+    /// RP ID information
+    pub rp_id_info: RpIdInformation,
+
+    /// P-256 public key
     pub public_key: CompressedP256PublicKey,
-    pub client_data_json_reconstruction_params: ClientDataJsonReconstructionParams,
+
+    /// Padding to ensure alignment
+    pub padding: [u8; 2],
+
+    /// Session key
+    pub session_key: SessionKey,
+
+    // Webauthn signature counter (used mostly by security keys)
+    pub counter: u64,
+}
+
+pub struct P256DeriveAccountArgs {
+    pub public_key: [u8; 33],
+}
+
+impl<'a> From<&'a P256ParsedInitializationData> for P256DeriveAccountArgs {
+    fn from(data: &'a P256ParsedInitializationData) -> Self {
+        Self {
+            public_key: data.public_key.to_bytes(),
+        }
+    }
+}
+
+impl<'a> From<&'a P256ParsedVerificationData> for P256DeriveAccountArgs {
+    fn from(data: &'a P256ParsedVerificationData) -> Self {
+        Self {
+            public_key: data.public_key.to_bytes(),
+        }
+    }
+}
+
+#[derive(BorshDeserialize, BorshSerialize, Clone, Copy, Zeroable, Pod)]
+#[repr(C)]
+pub struct CompressedP256PublicKey {
+    pub x: [u8; 32],
+    pub y_parity: u8,
+}
+
+impl CompressedP256PublicKey {
+    pub fn new(public_key: &[u8]) -> Self {
+        Self {
+            x: public_key[1..33].try_into().unwrap(),
+            y_parity: public_key[0],
+        }
+    }
+    pub fn to_bytes(&self) -> [u8; 33] {
+        let mut bytes = [0u8; 33];
+        bytes[0] = self.y_parity;
+        bytes[1..33].copy_from_slice(&self.x);
+        bytes
+    }
+}
+#[derive(BorshDeserialize, BorshSerialize, Clone, Copy, Zeroable, Pod)]
+#[repr(C)]
+pub struct RpIdInformation {
+    pub rp_id_len: u8,
+    pub rp_id: [u8; 32],
+    pub rp_id_hash: [u8; 32],
+}
+
+impl RpIdInformation {
+    pub fn new(rp_id: &[u8], rp_id_hash: [u8; HASH_LENGTH]) -> Self {
+        Self {
+            rp_id_len: rp_id.len() as u8,
+            rp_id: {
+                let mut fixed_rp_id = [0u8; 32];
+                fixed_rp_id[..rp_id.len()].copy_from_slice(&rp_id);
+                fixed_rp_id
+            },
+            rp_id_hash: rp_id_hash,
+        }
+    }
 }
 
 pub struct AccountSeeds {
@@ -119,13 +181,13 @@ impl AccountSeedsTrait for AccountSeeds {
     }
 }
 
-impl ExternallyOwnedAccountData for P256WebauthnAccountData {
+impl ExternallySignedAccountData for P256WebauthnAccountData {
     type AccountSeeds = AccountSeeds;
-    type RawInitializationData = P256WebauthnRawInitializationData;
-    type ParsedInitializationData = P256WebauthnParsedInitializationData;
-    type RawVerificationData = P256WebauthnRawVerificationData;
-    type ParsedVerificationData = P256WebauthnParsedVerificationData;
-    type DeriveAccountArgs = P256WebauthnDeriveAccountArgs;
+    type DeriveAccountArgs = P256DeriveAccountArgs;
+    type RawInitializationData = P256RawInitializationData;
+    type RawVerificationData = P256RawVerificationData;
+    type ParsedInitializationData = P256ParsedInitializationData;
+    type ParsedVerificationData = P256ParsedVerificationData;
 
     fn version() -> u8 {
         1
@@ -147,10 +209,11 @@ impl ExternallyOwnedAccountData for P256WebauthnAccountData {
         &mut self,
         args: &Self::ParsedInitializationData,
     ) -> Result<(), ProgramError> {
-        self.set_rp_id_info(args.rp_id_info);
-        self.set_public_key(args.public_key);
-        self.set_counter(args.counter);
-        self.set_session_key(args.session_key);
+        self.rp_id_info = args.rp_id_info;
+        self.public_key = args.public_key;
+        self.counter = args.counter;
+        self.session_key = args.session_key;
+
         Ok(())
     }
 
@@ -233,7 +296,7 @@ impl ExternallyOwnedAccountData for P256WebauthnAccountData {
 
         if counter != 0 {
             assert!(counter as u64 > self.counter);
-            self.set_counter(counter as u64);
+            self.counter = counter as u64;
         }
         Ok(())
     }
@@ -253,96 +316,21 @@ impl ExternallyOwnedAccountData for P256WebauthnAccountData {
         Ok(())
     }
 
-    fn is_valid_session_key(&self, signer: &Pubkey) -> Result<bool, ProgramError> {
+    fn is_valid_session_key(&self, signer: &Pubkey) -> Result<(), ProgramError> {
         let clock = Clock::get()?;
-        Ok(self.session_key.key == *signer && self.session_key.expiration > clock.slot)
+        if self.session_key.key != *signer {
+            return Err(ExternalSignatureProgramError::InvalidSessionKey.into());
+        }
+        if self.session_key.expiration < clock.unix_timestamp as u64 {
+            return Err(ExternalSignatureProgramError::SessionKeyExpired.into());
+        }
+        sol_log(format!("Session Key Expiration: {:?}", self.session_key.expiration).as_str());
+        sol_log(format!("Clock Timestamp: {:?}", clock.unix_timestamp).as_str());
+        Ok(())
     }
 
     fn update_session_key(&mut self, session_key: SessionKey) -> Result<(), ProgramError> {
         self.session_key = session_key;
         Ok(())
-    }
-}
-
-/// P-256 (secp256r1) account data
-#[derive(Pod, Zeroable, Copy, Clone)]
-#[repr(C)]
-pub struct P256WebauthnAccountData {
-    /// Exists here purely for alignment
-    _header: AccountHeader,
-
-    /// RP ID information
-    pub rp_id_info: RpIdInformation,
-
-    /// P-256 public key
-    pub public_key: CompressedP256PublicKey,
- 
-    /// Padding to ensure alignment
-    pub padding: [u8; 2],
-
-    /// Session key
-    pub session_key: SessionKey,
-
-    // Webauthn signature counter (used mostly by security keys)
-    pub counter: u64,
-}
-
-impl P256WebauthnAccountData {
-    pub fn set_rp_id_info(&mut self, rp_id: RpIdInformation) {
-        self.rp_id_info = rp_id;
-    }
-    pub fn set_public_key(&mut self, public_key: CompressedP256PublicKey) {
-        self.public_key = public_key;
-    }
-
-    pub fn set_counter(&mut self, counter: u64) {
-        self.counter = counter;
-    }
-
-    pub fn set_session_key(&mut self, session_key: SessionKey) {
-        self.session_key = session_key;
-    }
-}
-
-#[derive(Pod, Zeroable, Copy, Clone)]
-#[repr(C)]
-pub struct CompressedP256PublicKey {
-    pub x: [u8; 32],
-    pub y_parity: u8,
-}
-
-impl CompressedP256PublicKey {
-    pub fn new(public_key: &[u8]) -> Self {
-        Self {
-            x: public_key[1..33].try_into().unwrap(),
-            y_parity: public_key[0],
-        }
-    }
-    pub fn to_bytes(&self) -> [u8; 33] {
-        let mut bytes = [0u8; 33];
-        bytes[0] = self.y_parity;
-        bytes[1..33].copy_from_slice(&self.x);
-        bytes
-    }
-}
-#[derive(Pod, Zeroable, Copy, Clone)]
-#[repr(C)]
-pub struct RpIdInformation {
-    pub rp_id_len: u8,
-    pub rp_id: [u8; 32],
-    pub rp_id_hash: [u8; 32],
-}
-
-impl RpIdInformation {
-    pub fn new(rp_id: &[u8], rp_id_hash: [u8; HASH_LENGTH]) -> Self {
-        Self {
-            rp_id_len: rp_id.len() as u8,
-            rp_id: {
-                let mut fixed_rp_id = [0u8; 32];
-                fixed_rp_id[..rp_id.len()].copy_from_slice(&rp_id);
-                fixed_rp_id
-            },
-            rp_id_hash: rp_id_hash,
-        }
     }
 }

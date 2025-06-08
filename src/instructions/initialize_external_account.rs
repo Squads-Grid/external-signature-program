@@ -1,60 +1,48 @@
-use crate::{
-    checks::nonce::{validate_nonce, TruncatedSlot},
-    errors::{assert_with_msg, ExternalSignatureProgramError},
-    signatures::{
-        auth_data, client_data_json, AuthDataParser, AuthType, ClientDataJsonReconstructionParams,
-        SignatureScheme,
-    },
-    state::{
-        AccountHeader, AccountSeedsTrait, CompressedP256PublicKey,
-        ExternallyOwnedAccount, ExternallyOwnedAccountData,
-        P256WebauthnAccountData, RpIdInformation,
-    },
-    utils::{hash, sha256::hashv, PrecompileParser, Secp256r1Precompile, SlotHashes, SmallVec},
-};
 use borsh::{BorshDeserialize, BorshSerialize};
 use num_enum::TryFromPrimitive;
 use pinocchio::{
     account_info::{AccountInfo, Ref},
     instruction::{Seed, Signer},
-    log::{sol_log_64, sol_log_compute_units, sol_log_data},
-    msg,
     program_error::ProgramError,
-    pubkey::{try_find_program_address, Pubkey},
-    seeds, syscalls,
-    sysvars::{
-        instructions::{Instructions, INSTRUCTIONS_ID},
-        rent::Rent,
-        Sysvar,
-    },
+    sysvars::{instructions::Instructions, rent::Rent, Sysvar},
     ProgramResult,
 };
 use pinocchio_system::instructions::{Allocate, Assign, Transfer};
 
-pub const INITIALIZATION_CHALLENGE: [u8; 18] = [
-    105, 110, 105, 116, 105, 97, 108, 105, 122, 101, 95, 112, 97, 115, 115, 107, 101, 121,
-];
-pub const bytes: &[u8] = b"initialize_passkey";
-pub struct InitializeAccounts<'a> {
-    // [MUT]
-    pub external_account: &'a AccountInfo,
-    // [SIGNER]
-    pub rent_payer: &'a AccountInfo,
-    pub instructions_sysvar: &'a AccountInfo,
-    pub system_program: &'a AccountInfo,
-}
+use crate::{
+    errors::ExternalSignatureProgramError,
+    state::{
+        AccountSeedsTrait, ExternallySignedAccount, ExternallySignedAccountData,
+        P256WebauthnAccountData, SignatureScheme,
+    },
+    utils::nonce::{validate_nonce, TruncatedSlot},
+    utils::{hash, SlotHashes, SmallVec},
+};
 
-pub struct AccountInitializationContext<'a, T: ExternallyOwnedAccountData> {
-    pub external_account: ExternallyOwnedAccount<'a, T>,
-    pub external_account_seeds: T::AccountSeeds,
+pub struct InitializeAccounts<'a, T: ExternallySignedAccountData> {
+    // [MUT]
+    pub external_account: ExternallySignedAccount<'a, T>,
+    // [SIGNER]
     pub rent_payer: &'a AccountInfo,
     pub instructions_sysvar: Instructions<Ref<'a, [u8]>>,
     pub system_program: &'a AccountInfo,
+}
+
+pub struct InitializeExternalAccountContext<'a, T: ExternallySignedAccountData> {
+    pub accounts: InitializeAccounts<'a, T>,
+    pub external_account_seeds: T::AccountSeeds,
     pub signature_scheme_specific_initialization_data: T::ParsedInitializationData,
     pub slothash: [u8; 32],
 }
 
-impl<'a, T: ExternallyOwnedAccountData> AccountInitializationContext<'a, T> {
+#[derive(BorshDeserialize, BorshSerialize)]
+pub struct InitializeAccountArgs {
+    pub slothash: TruncatedSlot,
+    pub signature_scheme: u8,
+    pub initialization_data: SmallVec<u8, u8>,
+}
+
+impl<'a, T: ExternallySignedAccountData> InitializeExternalAccountContext<'a, T> {
     pub fn load(
         account_infos: &'a [AccountInfo],
         args: &'a InitializeAccountArgs,
@@ -93,7 +81,7 @@ impl<'a, T: ExternallyOwnedAccountData> AccountInitializationContext<'a, T> {
             return Err(ProgramError::InvalidAccountData);
         };
 
-        let externally_owned_account = ExternallyOwnedAccount::<T>::new(external_account)?;
+        let externally_signed_account = ExternallySignedAccount::<T>::new(external_account)?;
         let instructions_sysvar = Instructions::try_from(instructions_sysvar)?;
         let slothashes_sysvar = SlotHashes::try_from(slothashes_sysvar)?;
         let nonce_data = validate_nonce(slothashes_sysvar, &args.slothash, rent_payer)?;
@@ -103,18 +91,21 @@ impl<'a, T: ExternallyOwnedAccountData> AccountInitializationContext<'a, T> {
         let parsed_initialization_data = T::ParsedInitializationData::from(raw_initialization_data);
         let derive_args = T::DeriveAccountArgs::from(&parsed_initialization_data);
         let external_account_seeds = T::derive_account(derive_args)?;
-        if externally_owned_account
+        if externally_signed_account
             .key()
             .ne(external_account_seeds.key())
         {
             return Err(ProgramError::InvalidAccountOwner);
         }
+
         Ok(Self {
-            external_account: externally_owned_account,
+            accounts: InitializeAccounts {
+                external_account: externally_signed_account,
+                rent_payer,
+                instructions_sysvar,
+                system_program,
+            },
             external_account_seeds,
-            rent_payer,
-            instructions_sysvar,
-            system_program,
             signature_scheme_specific_initialization_data: parsed_initialization_data,
             slothash: nonce_data.slothash,
         })
@@ -129,23 +120,24 @@ impl<'a, T: ExternallyOwnedAccountData> AccountInitializationContext<'a, T> {
         let signer = [Signer::from(signer_seeds.as_slice())];
 
         Transfer {
-            from: self.rent_payer,
-            to: self.external_account.account_info,
+            from: self.accounts.rent_payer,
+            to: self.accounts.external_account.account_info,
             lamports: required_lamports,
         }
         .invoke()?;
         Allocate {
-            account: self.external_account.account_info,
+            account: self.accounts.external_account.account_info,
             space: space as u64,
         }
         .invoke_signed(&signer)?;
         Assign {
-            account: self.external_account.account_info,
+            account: self.accounts.external_account.account_info,
             owner: &crate::ID,
         }
         .invoke_signed(&signer)?;
 
-        self.external_account.reload()?;
+        self.accounts.external_account.reload()?;
+
         Ok(())
     }
 
@@ -156,52 +148,44 @@ impl<'a, T: ExternallyOwnedAccountData> AccountInitializationContext<'a, T> {
         let mut payload_bytes =
             Vec::with_capacity(signature_specific_initialization_payload.len() + 32 + 32);
         payload_bytes.extend_from_slice(&self.slothash);
-        payload_bytes.extend_from_slice(self.rent_payer.key());
+        payload_bytes.extend_from_slice(self.accounts.rent_payer.key());
         payload_bytes.extend_from_slice(&signature_specific_initialization_payload);
         hash(&payload_bytes)
     }
 }
 
-#[derive(BorshDeserialize, BorshSerialize)]
-pub struct InitializeAccountArgs {
-    pub slothash: TruncatedSlot,
-    pub signature_scheme: u8,
-    pub initialization_data: SmallVec<u8, u8>,
-}
-
-pub fn process_initialize_account(accounts: &[AccountInfo], data: &[u8]) -> ProgramResult {
-    //let initialization_data = InitializeAccountData::try_from(data)?;
+pub fn process_initialize_external_account(accounts: &[AccountInfo], data: &[u8]) -> ProgramResult {
     let initialization_data =
         InitializeAccountArgs::try_from_slice(data).map_err(|_| ProgramError::InvalidArgument)?;
     let signature_scheme =
         SignatureScheme::try_from_primitive(initialization_data.signature_scheme)
             .map_err(|_| ExternalSignatureProgramError::InvalidSignatureScheme)?;
 
-    let mut initialization_context = match signature_scheme {
-        SignatureScheme::P256Webauthn => {
-            AccountInitializationContext::<P256WebauthnAccountData>::load(
-                accounts,
-                &initialization_data,
-            )?
-        }
-    };
+    let mut initialization_context =
+        match signature_scheme {
+            SignatureScheme::P256Webauthn => InitializeExternalAccountContext::<
+                P256WebauthnAccountData,
+            >::load(accounts, &initialization_data)?,
+        };
 
     let signature_specific_initialization_payload = initialization_context
+        .accounts
         .external_account
         .get_initialization_payload();
+
     let initialization_payload_hash = initialization_context
         .get_initialization_payload_hash(signature_specific_initialization_payload);
 
     initialization_context.create_and_allocate_account()?;
 
-    let mut externally_owned_account = initialization_context.external_account;
+    let mut externally_owned_account = initialization_context.accounts.external_account;
 
     externally_owned_account.initialize_account(
         &initialization_context.signature_scheme_specific_initialization_data,
     )?;
 
     externally_owned_account.verfiy_initialization_payload(
-        &initialization_context.instructions_sysvar,
+        &initialization_context.accounts.instructions_sysvar,
         &initialization_context.signature_scheme_specific_initialization_data,
         &initialization_payload_hash,
     )?;

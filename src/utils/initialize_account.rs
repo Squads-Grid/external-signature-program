@@ -1,13 +1,22 @@
-
-use pinocchio::{account_info::AccountInfo, instruction::{Seed, Signer}, program_error::ProgramError, sysvars::{rent::Rent, Sysvar}};
+use pinocchio::{
+    account_info::AccountInfo,
+    instruction::{Seed, Signer},
+    program_error::ProgramError,
+    sysvars::{rent::Rent, Sysvar},
+};
 use pinocchio_system::instructions::{Allocate, Assign, Transfer};
 
-
-
-
-pub fn initialize_account(account_to_initialize: &AccountInfo, rent_payer: &AccountInfo, space: usize, seeds: &[&[u8]]) -> Result<(), ProgramError> {
+pub fn initialize_account(
+    account_to_initialize: &AccountInfo,
+    rent_payer: &AccountInfo,
+    space: usize,
+    seeds: &[&[u8]],
+) -> Result<(), ProgramError> {
     // Define the seeds for PDA signing
-    let seeds = seeds.iter().map(|seed| Seed::from(*seed)).collect::<Vec<Seed>>();
+    let seeds = seeds
+        .iter()
+        .map(|seed| Seed::from(*seed))
+        .collect::<Vec<Seed>>();
     let external_account_signer = [Signer::from(seeds.as_slice())];
 
     // Get required lamports for space

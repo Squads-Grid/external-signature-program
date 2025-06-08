@@ -1,12 +1,13 @@
 use base64::{
-    engine::{self, general_purpose},
-    Engine,
+    engine::general_purpose,
+    Engine as _,
 };
 use borsh::{BorshDeserialize, BorshSerialize};
-use pinocchio::{log::sol_log_compute_units, msg, pubkey::Pubkey};
+use bytemuck::{Pod, Zeroable};
 
 /// Minimal representation for reconstructing clientDataJson
-#[derive(Clone, Copy, Debug, BorshDeserialize, BorshSerialize)]
+#[derive(Clone, Copy, Debug, BorshDeserialize, BorshSerialize, Zeroable, Pod)]
+#[repr(C)]
 pub struct ClientDataJsonReconstructionParams {
     /// Type and flags packed into a single byte
     pub type_and_flags: u8,
@@ -141,7 +142,7 @@ pub fn reconstruct_client_data_json(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use base64::{engine::general_purpose, Engine as _};
+    use base64::engine::general_purpose;
 
     #[test]
     fn test_reconstruct_client_data_json() {

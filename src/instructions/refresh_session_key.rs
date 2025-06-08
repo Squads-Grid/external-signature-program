@@ -3,31 +3,32 @@ use num_enum::TryFromPrimitive;
 use pinocchio::{
     account_info::{AccountInfo, Ref},
     program_error::ProgramError,
-    sysvars::instructions::Instructions,
+    sysvars::{clock::Clock, instructions::Instructions, Sysvar},
     ProgramResult,
 };
 
 use crate::{
-    checks::nonce::{validate_nonce, TruncatedSlot},
     errors::ExternalSignatureProgramError,
-    signatures::SignatureScheme,
     state::{
-        ExternallyOwnedAccount, ExternallyOwnedAccountData, P256WebauthnAccountData, SessionKey,
+        ExternallySignedAccount, ExternallySignedAccountData, P256WebauthnAccountData, SessionKey,
+        SignatureScheme,
     },
+    utils::nonce::{validate_nonce, TruncatedSlot},
     utils::{hash, SlotHashes, SmallVec},
 };
 
 pub struct RefreshSessionKeyAccounts<'a> {
     // [MUT]
     pub external_account: &'a AccountInfo,
-    pub instructions_sysvar: &'a AccountInfo,
+    pub instructions_sysvar: Instructions<Ref<'a, [u8]>>,
+    pub slothashes_sysvar: SlotHashes<Ref<'a, [u8]>>,
     pub nonce_signer: &'a AccountInfo,
-    pub slothashes_sysvar: &'a AccountInfo,
 }
 
-pub struct RefreshSessionKeyContext<'a, T: ExternallyOwnedAccountData> {
-    pub external_account: ExternallyOwnedAccount<'a, T>,
+pub struct RefreshSessionKeyContext<'a, T: ExternallySignedAccountData> {
+    pub external_account: ExternallySignedAccount<'a, T>,
     pub instructions_sysvar: Instructions<Ref<'a, [u8]>>,
+    pub nonce_signer: &'a AccountInfo,
     pub signature_scheme_specific_verification_data: T::ParsedVerificationData,
     pub session_key: SessionKey,
     pub slothash: [u8; 32],
@@ -41,27 +42,27 @@ pub struct RefreshSessionKeyArgs {
     pub session_key: SessionKey,
 }
 
-impl<'a, T: ExternallyOwnedAccountData> RefreshSessionKeyContext<'a, T> {
+impl<'a, T: ExternallySignedAccountData> RefreshSessionKeyContext<'a, T> {
     pub fn load(
         account_infos: &'a [AccountInfo],
         args: &'a RefreshSessionKeyArgs,
     ) -> Result<Box<Self>, ProgramError> {
-        let (external_account, instructions_sysvar, nonce_signer, slothashes_sysvar, _remaining) =
-            if let [external_account, instructions_sysvar, nonce_signer, slothashes_sysvar, remaining @ ..] =
+        let (external_account, instructions_sysvar, slothashes_sysvar, nonce_signer, _remaining) =
+            if let [external_account, instructions_sysvar, slothashes_sysvar, nonce_signer, remaining @ ..] =
                 account_infos
             {
                 (
                     external_account,
                     instructions_sysvar,
-                    nonce_signer,
                     slothashes_sysvar,
+                    nonce_signer,
                     remaining,
                 )
             } else {
                 return Err(ProgramError::NotEnoughAccountKeys);
             };
 
-        let externally_owned_account = ExternallyOwnedAccount::<T>::new(external_account)?;
+        let externally_signed_account = ExternallySignedAccount::<T>::new(external_account)?;
         let verification_args =
             T::RawVerificationData::try_from_slice(&args.verification_data.as_slice())
                 .map_err(|_| ExternalSignatureProgramError::InvalidExtraVerificationDataArgs)?;
@@ -70,11 +71,12 @@ impl<'a, T: ExternallyOwnedAccountData> RefreshSessionKeyContext<'a, T> {
         let slothashes_sysvar = SlotHashes::try_from(slothashes_sysvar)?;
         let nonce_data = validate_nonce(slothashes_sysvar, &args.slothash, nonce_signer)?;
 
-        externally_owned_account.check_account(&parsed_verification_data)?;
+        externally_signed_account.check_account(&parsed_verification_data)?;
 
         Ok(Box::new(Self {
-            external_account: externally_owned_account,
+            external_account: externally_signed_account,
             instructions_sysvar,
+            nonce_signer,
             signature_scheme_specific_verification_data: parsed_verification_data,
             session_key: args.session_key,
             slothash: nonce_data.slothash,
@@ -84,7 +86,7 @@ impl<'a, T: ExternallyOwnedAccountData> RefreshSessionKeyContext<'a, T> {
     pub fn get_refresh_session_key_payload_hash(&self) -> [u8; 32] {
         let mut refresh_session_key_payload: Vec<u8> = Vec::with_capacity(104);
         refresh_session_key_payload.extend_from_slice(self.slothash.as_slice());
-        refresh_session_key_payload.extend_from_slice(self.external_account.key().as_ref());
+        refresh_session_key_payload.extend_from_slice(self.nonce_signer.key().as_ref());
 
         self.session_key
             .serialize(&mut refresh_session_key_payload)
@@ -116,9 +118,14 @@ pub fn process_refresh_session_key(accounts: &[AccountInfo], data: &[u8]) -> Pro
             &signature_specific_refresh_session_key_payload,
         )?;
 
+    let session_key_expiration = Clock::get()?.unix_timestamp + args.session_key.expiration as i64;
+    let session_key = SessionKey {
+        key: args.session_key.key,
+        expiration: session_key_expiration as u64,
+    };
     refresh_session_key_context
         .external_account
-        .update_session_key(args.session_key)?;
+        .update_session_key(session_key)?;
 
     Ok(())
 }

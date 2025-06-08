@@ -1,7 +1,6 @@
-
-use pinocchio_log::log;
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 use pinocchio::{program_error::ProgramError, ProgramResult};
+use pinocchio_log::log;
 use thiserror::Error;
 
 #[repr(u32)]
@@ -46,6 +45,12 @@ pub enum ExternalSignatureProgramError {
     InvalidExtraVerificationDataArgs,
     #[error("Invalid execution args")]
     InvalidExecutionArgs,
+    #[error("Session signer is not a signer")]
+    SessionSignerNotASigner,
+    #[error("Invalid session key")]
+    InvalidSessionKey,
+    #[error("Session key expired")]
+    SessionKeyExpired,
 
     /// Signature Scheme Related Errors
     #[error("Invalid signature scheme")]
@@ -58,6 +63,10 @@ pub enum ExternalSignatureProgramError {
     ClientDataHashMismatch,
     #[error("Account is not writable")]
     AccountNotWritable,
+    #[error("Invalid passkey Algorithm")]
+    InvalidAlgorithm,
+    #[error("Invalid public key encoding")]
+    InvalidPublicKeyEncoding,
 }
 
 impl From<ExternalSignatureProgramError> for ProgramError {

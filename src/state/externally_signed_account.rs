@@ -1,20 +1,18 @@
 use std::marker::PhantomData;
 
-use crate::errors::ExternalSignatureProgramError;
-use crate::signatures::SignatureScheme;
-use crate::state::SessionKey;
 use borsh::{BorshDeserialize, BorshSerialize};
 use bytemuck::{Pod, Zeroable};
-use pinocchio::account_info::{AccountInfo, Ref};
-use pinocchio::instruction::{Seed, Signer};
-use pinocchio::program_error::ProgramError;
-use pinocchio::pubkey::{try_find_program_address, Pubkey};
-use pinocchio::sysvars::instructions::Instructions;
-use pinocchio::{seeds, ProgramResult};
+use num_enum::{IntoPrimitive, TryFromPrimitive};
+use pinocchio::{
+    account_info::{AccountInfo, Ref},
+    instruction::Seed,
+    program_error::ProgramError,
+    pubkey::{try_find_program_address, Pubkey, PUBKEY_BYTES},
+    seeds,
+    sysvars::instructions::Instructions,
+};
 
-use super::p256_webauthn::P256WebauthnAccountData;
-
-use crate::instructions::refresh_session_key::RefreshSessionKeyArgs;
+use crate::errors::ExternalSignatureProgramError;
 
 /// Version and type header for all account data
 #[derive(Pod, Zeroable, Copy, Clone)]
@@ -39,13 +37,24 @@ impl AccountHeader {
     pub fn scheme(&self) -> u8 {
         self.scheme
     }
-    pub fn set<T: ExternallyOwnedAccountData>(&mut self) {
+    pub fn set<T: ExternallySignedAccountData>(&mut self) {
         self.version = T::version();
         self.scheme = T::scheme();
     }
 }
-pub enum ExternallyOwnedAccountType {
-    P256Webauthn,
+
+#[derive(BorshDeserialize, BorshSerialize, Clone, Copy, Zeroable, Pod, Default)]
+#[repr(C)]
+pub struct SessionKey {
+    pub key: [u8; PUBKEY_BYTES],
+    pub expiration: u64,
+}
+
+#[derive(TryFromPrimitive, IntoPrimitive, PartialEq, Eq, Debug, Clone, Copy)]
+#[repr(u8)]
+pub enum SignatureScheme {
+    P256Webauthn = 0,
+    // more schemes here
 }
 
 pub trait AccountSeedsTrait {
@@ -53,14 +62,15 @@ pub trait AccountSeedsTrait {
     fn bump(&self) -> u8;
     fn seeds(&self) -> Vec<&[u8]>;
 }
-pub trait ExternallyOwnedAccountData: Pod + Zeroable + Copy + Clone {
+
+pub trait ExternallySignedAccountData: Pod + Zeroable + Clone + Copy {
     type AccountSeeds: AccountSeedsTrait;
     type DeriveAccountArgs: for<'a> From<&'a Self::ParsedVerificationData>
         + for<'a> From<&'a Self::ParsedInitializationData>;
 
     type RawInitializationData: BorshDeserialize;
-    type ParsedInitializationData: From<Self::RawInitializationData>;
     type RawVerificationData: BorshDeserialize;
+    type ParsedInitializationData: From<Self::RawInitializationData>;
     type ParsedVerificationData: From<Self::RawVerificationData>;
 
     fn get_initialization_payload() -> &'static [u8];
@@ -89,7 +99,7 @@ pub trait ExternallyOwnedAccountData: Pod + Zeroable + Copy + Clone {
         extra_verification_data: &Self::ParsedVerificationData,
         payload: &[u8],
     ) -> Result<(), ProgramError>;
-    fn is_valid_session_key(&self, signer: &Pubkey) -> Result<bool, ProgramError>;
+    fn is_valid_session_key(&self, signer: &Pubkey) -> Result<(), ProgramError>;
     fn update_session_key(&mut self, session_key: SessionKey) -> Result<(), ProgramError>;
 }
 
@@ -107,13 +117,13 @@ impl<'a> ExecutionAccount<'a> {
     }
 }
 
-pub struct ExternallyOwnedAccount<'a, T: ExternallyOwnedAccountData> {
+pub struct ExternallySignedAccount<'a, T: ExternallySignedAccountData> {
     phantom: PhantomData<T>,
     pub account_info: &'a AccountInfo,
     data: &'a mut [u8],
 }
 
-impl<'a, T: ExternallyOwnedAccountData> ExternallyOwnedAccount<'a, T> {
+impl<'a, T: ExternallySignedAccountData> ExternallySignedAccount<'a, T> {
     pub fn new(account_info: &'a AccountInfo) -> Result<Self, ProgramError> {
         let mut data = account_info.try_borrow_mut_data()?;
         let data_ptr = data.as_mut_ptr(); // Get a raw pointer to the data
@@ -149,6 +159,11 @@ impl<'a, T: ExternallyOwnedAccountData> ExternallyOwnedAccount<'a, T> {
         let data = self.data()?;
         T::initialize_account(data, &args)?;
         Ok(())
+    }
+
+    pub fn is_valid_session_key(&self, signer: &Pubkey) -> Result<(), ProgramError> {
+        let data = self.data()?;
+        T::is_valid_session_key(data, signer)
     }
 
     pub fn update_session_key(&mut self, session_key: SessionKey) -> Result<(), ProgramError> {
@@ -193,7 +208,6 @@ impl<'a, T: ExternallyOwnedAccountData> ExternallyOwnedAccount<'a, T> {
     }
 
     pub fn get_initialization_payload(&self) -> &'static [u8] {
-
         T::get_initialization_payload()
     }
 

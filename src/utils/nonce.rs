@@ -1,11 +1,8 @@
 use borsh::{BorshDeserialize, BorshSerialize};
 use pinocchio::{
     account_info::{AccountInfo, Ref},
-    log::sol_log_slice,
-    msg,
     program_error::ProgramError,
     pubkey::Pubkey,
-    syscalls::sol_get_stack_height,
 };
 
 use crate::{
@@ -18,6 +15,10 @@ pub struct TruncatedSlot(pub u32);
 
 impl TruncatedSlot {
     pub fn new(untruncated_slot: u64) -> Result<Self, ProgramError> {
+        // We only expect truncated slots to be 0 - 999
+        if untruncated_slot > 999 {
+            return Err(ExternalSignatureProgramError::InvalidTruncatedSlot.into());
+        }
         let slot = untruncated_slot % 1000;
         Ok(Self(slot as u32))
     }
