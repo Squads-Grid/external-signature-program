@@ -2,13 +2,10 @@ use std::fs;
 
 use borsh::{to_vec, BorshSerialize};
 use external_signature_program::{
-    checks::nonce::TruncatedSlot,
-    instructions::{
-        execute_instructions::native::ExecutableInstructionArgs, refresh_session_key::RefreshSessionKeyArgs,
-    },
+    instructions::refresh_session_key::RefreshSessionKeyArgs,
     signatures::{AuthType, ClientDataJsonReconstructionParams},
-    state::{P256WebauthnRawVerificationData, SessionKey},
-    utils::{SmallVec, SLOT_HASHES_ID},
+    state::{P256RawVerificationData, SessionKey},
+    utils::{SmallVec, TruncatedSlot, SLOT_HASHES_ID},
 };
 use litesvm::LiteSVM;
 use pinocchio::sysvars::instructions::INSTRUCTIONS_ID;
@@ -16,10 +13,7 @@ use solana_program::instruction::{AccountMeta, Instruction};
 use solana_pubkey::Pubkey;
 
 use crate::p256::utils::{
-    instruction_and_payload_generation::{
-        create_instruction_payload, create_memo_instruction, create_system_transfer_instruction,
-        get_execution_account, serialize_compiled_instruction,
-    },
+    instruction_and_payload_generation::get_execution_account,
     parser::parse_webauthn_fixture,
     secp256r1_instruction::new_secp256r1_instruction,
 };
@@ -36,7 +30,7 @@ pub fn refresh_session_key(
     payer: &Pubkey,
     slot_num: TruncatedSlot,
     program_id: &Pubkey,
-) -> Result<(Vec<Instruction>), Box<dyn std::error::Error>> {
+) -> Result<Vec<Instruction>, Box<dyn std::error::Error>> {
     let json_data = fs::read_to_string(fixture_path).expect("Unable to read fixture file");
     let webauthn_data = parse_webauthn_fixture(&json_data).unwrap();
     let public_key = webauthn_data.public_key.unwrap();
@@ -53,11 +47,10 @@ pub fn refresh_session_key(
 
     let client_data_json_reconstruction_params =
         ClientDataJsonReconstructionParams::new(AuthType::Get, false, false, false);
-    let extra_verification_data = P256WebauthnRawVerificationData {
+    let extra_verification_data = P256RawVerificationData {
         public_key: public_key.clone().try_into().unwrap(),
         client_data_json_reconstruction_params,
     };
-
     let execution_account = get_execution_account(passkey_account.clone(), program_id.clone());
     svm.airdrop(&execution_account, 1000000000).unwrap();
 

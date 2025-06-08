@@ -1,10 +1,7 @@
-use std::{
-    error::Error,
-    time::{SystemTime, UNIX_EPOCH},
-};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use external_signature_program::{
-    checks::nonce::TruncatedSlot, errors::ExternalSignatureProgramError, ID as PROGRAM_ID,
+    errors::ExternalSignatureProgramError, utils::nonce::TruncatedSlot, ID as PROGRAM_ID,
 };
 use litesvm::{types::FailedTransactionMetadata, LiteSVM};
 use sha2::{Digest, Sha256};

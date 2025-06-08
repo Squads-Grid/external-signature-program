@@ -1,7 +1,6 @@
-
-use pinocchio_log::log;
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 use pinocchio::{program_error::ProgramError, ProgramResult};
+use pinocchio_log::log;
 use thiserror::Error;
 
 #[repr(u32)]

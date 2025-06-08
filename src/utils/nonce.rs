@@ -1,11 +1,8 @@
 use borsh::{BorshDeserialize, BorshSerialize};
 use pinocchio::{
     account_info::{AccountInfo, Ref},
-    log::sol_log_slice,
-    msg,
     program_error::ProgramError,
     pubkey::Pubkey,
-    syscalls::sol_get_stack_height,
 };
 
 use crate::{

@@ -1,60 +1,40 @@
-use std::cmp::max;
-
-use crate::{
-    checks::nonce::{validate_nonce, TruncatedSlot},
-    errors::assert_with_msg,
-    signatures::{
-        reconstruct_client_data_json, AuthDataParser, AuthType, ClientDataJsonReconstructionParams,
-    },
-    state::{ExecutionAccount, ExternallyOwnedAccount},
-    utils::{hashv, sha256::hash, SlotHash, SlotHashes},
-};
-use base64::{engine::general_purpose, Engine};
 use borsh::{BorshDeserialize, BorshSerialize};
-use bytemuck::{Pod, Zeroable};
 use num_enum::TryFromPrimitive;
 use pinocchio::{
-    account_info::{AccountInfo, Ref},
+    account_info::AccountInfo,
     cpi::slice_invoke_signed,
     instruction::{AccountMeta, Instruction, Signer},
-    log::sol_log_compute_units,
-    msg,
     program_error::ProgramError,
-    syscalls::sol_remaining_compute_units,
-    sysvars::{clock::Clock, instructions::Instructions, Sysvar},
     ProgramResult,
 };
 
 use crate::{
     errors::ExternalSignatureProgramError,
-    signatures::SignatureScheme,
-    state::{ExternallyOwnedAccountData, P256WebauthnAccountData},
+    instructions::CompiledInstruction,
+    state::{ExecutionAccount, ExternallySignedAccount, SignatureScheme},
+    state::{ExternallySignedAccountData, P256WebauthnAccountData},
     utils::SmallVec,
 };
 
-use super::shared::CompiledInstruction;
-
-// TODO: Rename
-pub struct ExecuteInstructionsContext<'a, T: ExternallyOwnedAccountData> {
-    pub external_account: Box<ExternallyOwnedAccount<'a, T>>,
+pub struct ExecuteInstructionsSessionedContext<'a, T: ExternallySignedAccountData> {
+    pub external_account: Box<ExternallySignedAccount<'a, T>>,
     pub execution_account: ExecutionAccount<'a>,
     pub session_signer: &'a AccountInfo,
     pub instructions: Box<&'a [CompiledInstruction]>,
     pub instruction_execution_accounts: Box<&'a [AccountInfo]>,
     pub instruction_execution_account_metas: Box<Vec<AccountMeta<'a>>>,
 }
-// TODO: Rename
+
 #[derive(BorshDeserialize, BorshSerialize)]
-pub struct ExecutableInstructionArgs {
+pub struct ExecutableInstructionSessionedArgs {
     pub signature_scheme: u8,
     pub instructions: SmallVec<u8, CompiledInstruction>,
 }
 
-
-impl<'a, T: ExternallyOwnedAccountData> ExecuteInstructionsContext<'a, T> {
+impl<'a, T: ExternallySignedAccountData> ExecuteInstructionsSessionedContext<'a, T> {
     pub fn load(
         account_infos: &'a [AccountInfo],
-        execution_args: &'a ExecutableInstructionArgs,
+        execution_args: &'a ExecutableInstructionSessionedArgs,
     ) -> Result<Box<Self>, ProgramError> {
         let (external_account, session_signer, instruction_execution_accounts) = if let [external_account, session_signer, instruction_execution_accounts @ ..] =
             account_infos
@@ -68,7 +48,7 @@ impl<'a, T: ExternallyOwnedAccountData> ExecuteInstructionsContext<'a, T> {
             return Err(ProgramError::NotEnoughAccountKeys);
         };
 
-        let external_account = ExternallyOwnedAccount::<T>::new(external_account)?;
+        let external_account = ExternallySignedAccount::<T>::new(external_account)?;
         let external_execution_account = external_account.get_execution_account();
 
         if !session_signer.is_signer() {
@@ -100,15 +80,18 @@ impl<'a, T: ExternallyOwnedAccountData> ExecuteInstructionsContext<'a, T> {
     }
 }
 
-pub fn process_execute_instructions(accounts: &[AccountInfo], data: &[u8]) -> ProgramResult {
-    let args = ExecutableInstructionArgs::try_from_slice(data)
+pub fn process_execute_instructions_sessioned(
+    accounts: &[AccountInfo],
+    data: &[u8],
+) -> ProgramResult {
+    let args = ExecutableInstructionSessionedArgs::try_from_slice(data)
         .map_err(|_| ExternalSignatureProgramError::InvalidExecutionArgs)?;
     let signature_scheme = SignatureScheme::try_from_primitive(args.signature_scheme)
         .map_err(|_| ExternalSignatureProgramError::InvalidSignatureScheme)?;
 
     let execution_context = match signature_scheme {
         SignatureScheme::P256Webauthn => {
-            ExecuteInstructionsContext::<P256WebauthnAccountData>::load(accounts, &args)?
+            ExecuteInstructionsSessionedContext::<P256WebauthnAccountData>::load(accounts, &args)?
         }
     };
 

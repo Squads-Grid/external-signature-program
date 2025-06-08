@@ -1,5 +1,5 @@
 use bytemuck::{Pod, Zeroable};
-use pinocchio::{program_error::ProgramError, pubkey::Pubkey, sysvars::instructions::Instructions, ProgramResult};
+use pinocchio::{pubkey::Pubkey, sysvars::instructions::Instructions, ProgramResult};
 use pinocchio_pubkey::pubkey;
 
 use crate::errors::ExternalSignatureProgramError;
@@ -31,7 +31,7 @@ pub struct Secp256r1SignatureOffsets {
     pub message_instruction_index: u16,
 }
 
-pub fn verify_registration(precompile_instruction_index: u8, rp_id: &[u8], instructions_sysvar_data: &[u8]) -> ProgramResult {
+pub fn verify_registration(precompile_instruction_index: u8, instructions_sysvar_data: &[u8]) -> ProgramResult {
     let instructions = unsafe { Instructions::new_unchecked(instructions_sysvar_data) };
 
     let secp256r1_instruction = instructions.load_instruction_at(precompile_instruction_index as usize)?;

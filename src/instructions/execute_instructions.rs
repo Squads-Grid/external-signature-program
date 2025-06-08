@@ -1,41 +1,27 @@
-use std::cmp::max;
 
 use crate::{
-    checks::nonce::{validate_nonce, TruncatedSlot},
-    errors::assert_with_msg,
-    signatures::{
-        reconstruct_client_data_json, AuthDataParser, AuthType, ClientDataJsonReconstructionParams,
-    },
-    state::{ExecutionAccount, ExternallyOwnedAccount},
-    utils::{hashv, sha256::hash, SlotHash, SlotHashes},
+    state::{ExecutionAccount, ExternallySignedAccount, SignatureScheme},
+    utils::{nonce::{validate_nonce, TruncatedSlot}, sha256::hash, SlotHashes},
 };
-use base64::{engine::general_purpose, Engine};
 use borsh::{BorshDeserialize, BorshSerialize};
-use bytemuck::{Pod, Zeroable};
 use num_enum::TryFromPrimitive;
 use pinocchio::{
     account_info::{AccountInfo, Ref},
     cpi::slice_invoke_signed,
     instruction::{AccountMeta, Instruction, Signer},
-    log::sol_log_compute_units,
-    msg,
     program_error::ProgramError,
-    syscalls::sol_remaining_compute_units,
     sysvars::instructions::Instructions,
     ProgramResult,
 };
 
 use crate::{
     errors::ExternalSignatureProgramError,
-    signatures::SignatureScheme,
-    state::{ExternallyOwnedAccountData, P256WebauthnAccountData},
+    state::{ExternallySignedAccountData, P256WebauthnAccountData},
     utils::SmallVec,
 };
 
-use super::shared::CompiledInstruction;
-
-pub struct ExecuteInstructionsContext<'a, T: ExternallyOwnedAccountData> {
-    pub external_account: Box<ExternallyOwnedAccount<'a, T>>,
+pub struct ExecuteInstructionsContext<'a, T: ExternallySignedAccountData> {
+    pub external_account: Box<ExternallySignedAccount<'a, T>>,
     pub execution_account: ExecutionAccount<'a>,
     pub signature_scheme_specific_verification_data: T::ParsedVerificationData,
     pub instructions_sysvar_account: Box<Instructions<Ref<'a, [u8]>>>,
@@ -54,9 +40,14 @@ pub struct ExecutableInstructionArgs {
     pub instructions: SmallVec<u8, CompiledInstruction>,
 }
 
+#[derive(BorshDeserialize, BorshSerialize)]
+pub struct CompiledInstruction {
+    pub program_id_index: u8,
+    pub accounts_indices: SmallVec<u8, u8>,
+    pub data: SmallVec<u16, u8>,
+}
 
-
-impl<'a, T: ExternallyOwnedAccountData> ExecuteInstructionsContext<'a, T> {
+impl<'a, T: ExternallySignedAccountData> ExecuteInstructionsContext<'a, T> {
     pub fn load(
         account_infos: &'a [AccountInfo],
         execution_args: &'a ExecutableInstructionArgs,
@@ -81,15 +72,13 @@ impl<'a, T: ExternallyOwnedAccountData> ExecuteInstructionsContext<'a, T> {
             return Err(ProgramError::NotEnoughAccountKeys);
         };
 
-        let external_account = ExternallyOwnedAccount::<T>::new(external_account)?;
+        let external_account = ExternallySignedAccount::<T>::new(external_account)?;
         let external_execution_account = external_account.get_execution_account();
-
         let args = T::RawVerificationData::try_from_slice(
             &execution_args.extra_verification_data.as_slice(),
         )
         .map_err(|_| ExternalSignatureProgramError::InvalidExtraVerificationDataArgs)?;
         let parsed_verification_data = T::ParsedVerificationData::from(args);
-
         external_account.check_account(&parsed_verification_data)?;
 
         let instructions_sysvar = Instructions::try_from(instructions_sysvar)?;

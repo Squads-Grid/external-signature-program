@@ -2,21 +2,14 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use external_signature_program::errors::ExternalSignatureProgramError;
 use litesvm::LiteSVM;
-use sha2::digest::Key;
 use solana_keypair::Keypair;
-use solana_program::{clock::Clock, instruction::InstructionError};
+use solana_program::clock::Clock;
 use solana_pubkey::Pubkey;
 use solana_signer::{EncodableKey, Signer};
-use solana_transaction_error::TransactionError;
 
-use crate::{
-    authentication::authenticate_passkey_account,
-    initialization::initialize_passkey_account,
-    svm::{create_and_send_svm_transaction, get_valid_slothash, initialize_svm},
-};
+use crate::svm::create_and_send_svm_transaction;
 
 use super::{
-    account_session_authentication::test_session_authentication_from_fixture,
     execute_sessioned_instructions::execute_sessioned_instructions,
     svm::create_and_assert_svm_transaction,
 };
@@ -64,7 +57,8 @@ fn test_sessioned_execution_from_fixture(
         &payer.pubkey(),
         vec![&payer, session_key],
         Some(ExternalSignatureProgramError::SessionKeyExpired),
-    ).unwrap()
+    )
+    .unwrap()
 }
 
 #[cfg(test)]

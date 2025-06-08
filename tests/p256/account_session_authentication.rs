@@ -2,7 +2,6 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::{
     p256::utils::{
-        authentication::authenticate_passkey_account,
         initialization::initialize_passkey_account,
         svm::{create_and_send_svm_transaction, get_valid_slothash, initialize_svm},
     },
@@ -25,7 +24,7 @@ pub fn test_session_authentication_from_fixture(payer: &Keypair, create_account_
     let (hash, truncated_slot) = get_valid_slothash(&svm);
     println!("Hash: {:?}", hash);
     // Get the passkey account and instructions from our abstracted function
-    let (account_pubkey, public_key, instructions) = initialize_passkey_account(
+    let (account_pubkey, _public_key, instructions) = initialize_passkey_account(
         create_account_path,
         &payer.pubkey(),
         &truncated_slot,

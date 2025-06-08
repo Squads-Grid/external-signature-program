@@ -3,7 +3,7 @@ use solana_keypair::Keypair;
 use solana_signer::{EncodableKey, Signer};
 use crate::p256::utils::svm::get_valid_slothash;
 use crate::p256::utils::{
-    svm::{create_and_send_svm_transaction, initialize_svm},
+    svm::initialize_svm,
     initialization::initialize_passkey_account,
 };
 

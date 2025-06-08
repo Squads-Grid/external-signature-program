@@ -1,27 +1,14 @@
-use std::fs;
-
-use borsh::{to_vec, BorshSerialize};
-use external_signature_program::{
-    checks::nonce::TruncatedSlot,
-    instructions::execute_instructions::sessioned::ExecutableInstructionArgs,
-    signatures::{AuthType, ClientDataJsonReconstructionParams},
-    state::P256WebauthnRawVerificationData,
-    utils::{SmallVec, SLOT_HASHES_ID},
-};
+use borsh::BorshSerialize;
+use external_signature_program::instructions::ExecutableInstructionSessionedArgs;
 use litesvm::LiteSVM;
-use pinocchio::sysvars::instructions::INSTRUCTIONS_ID;
 use solana_keypair::Keypair;
 use solana_program::instruction::{AccountMeta, Instruction};
 use solana_pubkey::Pubkey;
 use solana_signer::Signer;
 
-use crate::p256::utils::{
-    instruction_and_payload_generation::{
-        create_instruction_payload, create_memo_instruction, create_system_transfer_instruction,
-        get_execution_account, serialize_compiled_instruction,
-    },
-    parser::parse_webauthn_fixture,
-    secp256r1_instruction::new_secp256r1_instruction,
+use crate::p256::utils::instruction_and_payload_generation::{
+    create_instruction_payload, create_memo_instruction, create_system_transfer_instruction,
+    get_execution_account, serialize_compiled_instruction,
 };
 
 pub fn execute_sessioned_instructions(
@@ -40,7 +27,7 @@ pub fn execute_sessioned_instructions(
     // Instruction data
     let (account_metas, compiled_instruction) = create_instruction_payload(instructions);
     let serialized_compiled_instruction = serialize_compiled_instruction(compiled_instruction);
-    let external_sig_ix_data = ExecutableInstructionArgs {
+    let external_sig_ix_data = ExecutableInstructionSessionedArgs {
         signature_scheme: 0,
         instructions: serialized_compiled_instruction,
     };
@@ -65,5 +52,6 @@ pub fn execute_sessioned_instructions(
         .collect(),
         data: serialized_ix_data,
     };
-    Ok((vec![external_sig_ix]))
+
+    Ok(vec![external_sig_ix])
 }

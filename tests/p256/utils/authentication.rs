@@ -1,14 +1,25 @@
 use std::fs;
 
 use borsh::{to_vec, BorshSerialize};
-use external_signature_program::{checks::nonce::TruncatedSlot, instructions::execute_instructions::native::ExecutableInstructionArgs, signatures::{AuthType, ClientDataJsonReconstructionParams}, state::P256WebauthnRawVerificationData, utils::{SmallVec, SLOT_HASHES_ID}};
+use external_signature_program::{
+    instructions::execute_instructions::ExecutableInstructionArgs,
+    signatures::{AuthType, ClientDataJsonReconstructionParams},
+    state::P256RawVerificationData,
+    utils::{nonce::TruncatedSlot, SmallVec, SLOT_HASHES_ID},
+};
 use litesvm::LiteSVM;
 use pinocchio::sysvars::instructions::INSTRUCTIONS_ID;
 use solana_program::instruction::{AccountMeta, Instruction};
 use solana_pubkey::Pubkey;
 
-use crate::p256::utils::{instruction_and_payload_generation::{create_instruction_payload, create_memo_instruction, create_system_transfer_instruction, get_execution_account, serialize_compiled_instruction}, parser::parse_webauthn_fixture, secp256r1_instruction::new_secp256r1_instruction};
-
+use crate::p256::utils::{
+    instruction_and_payload_generation::{
+        create_instruction_payload, create_memo_instruction, create_system_transfer_instruction,
+        get_execution_account, serialize_compiled_instruction,
+    },
+    parser::parse_webauthn_fixture,
+    secp256r1_instruction::new_secp256r1_instruction,
+};
 
 pub fn authenticate_passkey_account(
     fixture_path: &str,
@@ -17,7 +28,7 @@ pub fn authenticate_passkey_account(
     payer: &Pubkey,
     slot_num: TruncatedSlot,
     program_id: &Pubkey,
-) -> Result<(Vec<Instruction>), Box<dyn std::error::Error>> {
+) -> Result<Vec<Instruction>, Box<dyn std::error::Error>> {
     let json_data = fs::read_to_string(fixture_path).expect("Unable to read fixture file");
     let webauthn_data = parse_webauthn_fixture(&json_data).unwrap();
     let public_key = webauthn_data.public_key.unwrap();
@@ -34,7 +45,7 @@ pub fn authenticate_passkey_account(
 
     let client_data_json_reconstruction_params =
         ClientDataJsonReconstructionParams::new(AuthType::Get, false, false, false);
-    let extra_verification_data = P256WebauthnRawVerificationData {
+    let extra_verification_data = P256RawVerificationData {
         public_key: public_key.clone().try_into().unwrap(),
         client_data_json_reconstruction_params,
     };

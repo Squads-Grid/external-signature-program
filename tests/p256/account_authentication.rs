@@ -59,7 +59,7 @@ fn test_authentication_invalid_slothash(create_account_path: &str, auth_path: &s
     .unwrap();
     let (mut svm, program_id) = initialize_svm(vec![payer.pubkey()]);
 
-    let (hash, truncated_slot) = get_valid_slothash(&svm);
+    let (_hash, truncated_slot) = get_valid_slothash(&svm);
     // Get the passkey account and instructions from our abstracted function
     let (account_pubkey, _public_key, instructions) = initialize_passkey_account(
         create_account_path,
@@ -80,7 +80,7 @@ fn test_authentication_invalid_slothash(create_account_path: &str, auth_path: &s
     let account = svm.get_account(&account_pubkey).unwrap();
     assert_eq!(account.data.len() > 0, true);
 
-    let (hash, truncated_slot) = get_expired_slothash(&svm);
+    let (_hash, truncated_slot) = get_expired_slothash(&svm);
 
     let instructions = authenticate_passkey_account(
         auth_path,
@@ -109,7 +109,7 @@ fn test_authentication_invalid_truncated_slot(create_account_path: &str, auth_pa
     .unwrap();
     let (mut svm, program_id) = initialize_svm(vec![payer.pubkey()]);
 
-    let (hash, truncated_slot) = get_valid_slothash(&svm);
+    let (_hash, truncated_slot) = get_valid_slothash(&svm);
     // Get the passkey account and instructions from our abstracted function
     let (account_pubkey, _public_key, instructions) = initialize_passkey_account(
         create_account_path,
@@ -130,7 +130,7 @@ fn test_authentication_invalid_truncated_slot(create_account_path: &str, auth_pa
     let account = svm.get_account(&account_pubkey).unwrap();
     assert_eq!(account.data.len() > 0, true);
 
-    let (hash, mut truncated_slot) = get_valid_slothash(&svm);
+    let (_hash, mut truncated_slot) = get_valid_slothash(&svm);
 
     // This is invalid since we only expect 0 - 999 as a truncated slot
     truncated_slot.0 = 1000;

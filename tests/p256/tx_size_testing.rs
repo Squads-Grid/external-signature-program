@@ -2,10 +2,7 @@ use bincode::serialize;
 use litesvm::LiteSVM;
 use solana_keypair::Keypair;
 use solana_message::Message;
-use solana_program::{
-    instruction::{AccountMeta, Instruction},
-    pubkey::Pubkey,
-};
+use solana_program::pubkey::Pubkey;
 use solana_signer::{EncodableKey, Signer};
 use solana_transaction::Transaction;
 
@@ -16,9 +13,10 @@ use crate::utils::instruction_and_payload_generation::create_system_transfer_ins
 fn test_non_wrapped_execution() {
     let mut svm = LiteSVM::new().with_sigverify(false);
     println!("svm: {:#?}", svm.get_sigverify());
-    let signer_keypair =
-        Keypair::read_from_file("tests/p256/keypairs/sinf1bu1CMQaMzeDoysAU7dAp2gs5j2V3vM9W5ZXAyB.json")
-            .unwrap();
+    let signer_keypair = Keypair::read_from_file(
+        "tests/p256/keypairs/sinf1bu1CMQaMzeDoysAU7dAp2gs5j2V3vM9W5ZXAyB.json",
+    )
+    .unwrap();
     svm.airdrop(&signer_keypair.pubkey(), 1_000_000_000)
         .unwrap();
     let memo_instruction = create_memo_instruction();
