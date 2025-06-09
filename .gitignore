@@ -54,3 +54,6 @@ yarn-error.log*
 
 # Diff files
 diff.txt
+
+# Cursor files
+.cursor
