@@ -51,6 +51,8 @@ pub enum ExternalSignatureProgramError {
     InvalidSessionKey,
     #[error("Session key expired")]
     SessionKeyExpired,
+    #[error("Invalid session key expiration")]
+    InvalidSessionKeyExpiration,
 
     /// Signature Scheme Related Errors
     #[error("Invalid signature scheme")]

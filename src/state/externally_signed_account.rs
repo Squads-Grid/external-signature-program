@@ -14,6 +14,8 @@ use pinocchio::{
 
 use crate::errors::ExternalSignatureProgramError;
 
+pub const SESSION_KEY_EXPIRATION_LIMIT: u64 = 3 * 30 * 24 * 60 * 60; // 3 months in seconds
+
 /// Version and type header for all account data
 #[derive(Pod, Zeroable, Copy, Clone)]
 #[repr(C)]

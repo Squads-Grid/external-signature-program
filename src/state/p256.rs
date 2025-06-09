@@ -16,6 +16,7 @@ use crate::{
     },
     state::{
         AccountHeader, AccountSeedsTrait, ExternallySignedAccountData, SessionKey, SignatureScheme,
+        SESSION_KEY_EXPIRATION_LIMIT,
     },
     utils::{hash, PrecompileParser, Secp256r1Precompile, SmallVec, HASH_LENGTH},
 };
@@ -209,6 +210,12 @@ impl ExternallySignedAccountData for P256WebauthnAccountData {
         &mut self,
         args: &Self::ParsedInitializationData,
     ) -> Result<(), ProgramError> {
+        if args.session_key.expiration
+            > Clock::get()?.unix_timestamp as u64 + SESSION_KEY_EXPIRATION_LIMIT
+        {
+            return Err(ExternalSignatureProgramError::InvalidSessionKeyExpiration.into());
+        }
+
         self.rp_id_info = args.rp_id_info;
         self.public_key = args.public_key;
         self.counter = args.counter;
@@ -330,7 +337,14 @@ impl ExternallySignedAccountData for P256WebauthnAccountData {
     }
 
     fn update_session_key(&mut self, session_key: SessionKey) -> Result<(), ProgramError> {
+        if session_key.expiration
+            > Clock::get()?.unix_timestamp as u64 + SESSION_KEY_EXPIRATION_LIMIT
+        {
+            return Err(ExternalSignatureProgramError::InvalidSessionKeyExpiration.into());
+        }
+
         self.session_key = session_key;
+
         Ok(())
     }
 }
