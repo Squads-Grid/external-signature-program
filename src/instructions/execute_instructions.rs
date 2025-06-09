@@ -1,15 +1,22 @@
-
 use crate::{
-    state::{ExecutionAccount, ExternallySignedAccount, SignatureScheme},
-    utils::{nonce::{validate_nonce, TruncatedSlot}, sha256::hash, SlotHashes},
+    state::{
+        AccountSeedsTrait, ExecutionAccount, ExternallySignedAccount, SignatureScheme,
+        SignerExecutionScheme,
+    },
+    utils::{
+        nonce::{validate_nonce, TruncatedSlot},
+        sha256::hash,
+        SlotHashes,
+    },
 };
 use borsh::{BorshDeserialize, BorshSerialize};
 use num_enum::TryFromPrimitive;
 use pinocchio::{
     account_info::{AccountInfo, Ref},
     cpi::slice_invoke_signed,
-    instruction::{AccountMeta, Instruction, Signer},
+    instruction::{AccountMeta, Instruction, Seed, Signer},
     program_error::ProgramError,
+    seeds,
     sysvars::instructions::Instructions,
     ProgramResult,
 };
@@ -38,6 +45,7 @@ pub struct ExecutableInstructionArgs {
     pub slothash: TruncatedSlot,
     pub extra_verification_data: SmallVec<u8, u8>,
     pub instructions: SmallVec<u8, CompiledInstruction>,
+    pub signer_execution_scheme: u8,
 }
 
 #[derive(BorshDeserialize, BorshSerialize)]
@@ -72,8 +80,11 @@ impl<'a, T: ExternallySignedAccountData> ExecuteInstructionsContext<'a, T> {
             return Err(ProgramError::NotEnoughAccountKeys);
         };
 
+        let signer_execution_scheme =
+            SignerExecutionScheme::try_from_primitive(execution_args.signer_execution_scheme)
+                .map_err(|_| ExternalSignatureProgramError::InvalidSignerExecutionScheme)?;
         let external_account = ExternallySignedAccount::<T>::new(external_account)?;
-        let external_execution_account = external_account.get_execution_account();
+        let execution_account = external_account.get_execution_account(signer_execution_scheme)?;
         let args = T::RawVerificationData::try_from_slice(
             &execution_args.extra_verification_data.as_slice(),
         )
@@ -87,13 +98,51 @@ impl<'a, T: ExternallySignedAccountData> ExecuteInstructionsContext<'a, T> {
         let nonce_data =
             validate_nonce(slothashes_sysvar, &execution_args.slothash, signer_account)?;
 
+        let signer_execution_account = match signer_execution_scheme {
+            SignerExecutionScheme::ExternalAccount => external_account.account_info,
+            SignerExecutionScheme::ExecutionAccount => execution_account.account_info,
+        };
+
+        let execution_account_seeds = external_account.derive_existing_account()?;
+        let seeds = execution_account_seeds.seeds();
+        let external_account_signer_seeds =
+            seeds.iter().map(|s| Seed::from(*s)).collect::<Vec<Seed>>();
+        let execution_account_signer_seeds = execution_account.to_signer_seeds();
+
+        // validate the signer execution scheme
+        let signer: [Signer; 1] = match signer_execution_scheme {
+            SignerExecutionScheme::ExternalAccount => {
+                if !external_account.account_info.is_signer() {
+                    return Err(
+                        ExternalSignatureProgramError::SignerExecutionAccountNotASigner.into(),
+                    );
+                }
+
+                let signer = [Signer::from(external_account_signer_seeds.as_slice())];
+
+                signer
+            }
+            SignerExecutionScheme::ExecutionAccount => {
+                let signer = [Signer::from(execution_account_signer_seeds.as_slice())];
+
+                signer
+            }
+        };
+
         let instruction_execution_account_metas = instruction_execution_accounts
             .iter()
             .map(
-                |account| match account.key() == &external_execution_account.key {
+                |account| match account.key() == signer_execution_account.key() {
                     // The execution account needs to be set to be a signer for the
                     // later instruction execution
-                    true => AccountMeta::new(account.key(), account.is_writable(), true),
+                    true => match signer_execution_scheme {
+                        SignerExecutionScheme::ExternalAccount => {
+                            AccountMeta::new(account.key(), false, true)
+                        }
+                        SignerExecutionScheme::ExecutionAccount => {
+                            AccountMeta::new(account.key(), account.is_writable(), true)
+                        }
+                    },
                     _ => {
                         AccountMeta::new(account.key(), account.is_writable(), account.is_signer())
                     }
@@ -103,7 +152,7 @@ impl<'a, T: ExternallySignedAccountData> ExecuteInstructionsContext<'a, T> {
 
         Ok(Box::new(Self {
             external_account: Box::new(external_account),
-            execution_account: external_execution_account,
+            execution_account,
             signature_scheme_specific_verification_data: parsed_verification_data,
             instructions_sysvar_account: Box::new(instructions_sysvar),
             signer_account,
@@ -140,6 +189,9 @@ pub fn process_execute_instructions(accounts: &[AccountInfo], data: &[u8]) -> Pr
         .map_err(|_| ExternalSignatureProgramError::InvalidExecutionArgs)?;
     let signature_scheme = SignatureScheme::try_from_primitive(args.signature_scheme)
         .map_err(|_| ExternalSignatureProgramError::InvalidSignatureScheme)?;
+    let signer_execution_type =
+        SignerExecutionScheme::try_from_primitive(args.signer_execution_scheme)
+            .map_err(|_| ExternalSignatureProgramError::InvalidSignerExecutionScheme)?;
 
     let mut execution_context = match signature_scheme {
         SignatureScheme::P256Webauthn => {
