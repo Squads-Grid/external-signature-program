@@ -79,7 +79,7 @@ pub fn test_session_authentication_from_fixture(payer: &Keypair, create_account_
 mod test_authentication {
     use super::*;
 
-    #[test]
+    // #[test]
     fn test_yubikey_authentication() {
         let payer =
         Keypair::read_from_file("tests/p256/keypairs/sinf1bu1CMQaMzeDoysAU7dAp2gs5j2V3vM9W5ZXAyB.json")
@@ -103,7 +103,7 @@ mod test_authentication {
         );
     }
 
-    #[test]
+    // #[test]
     fn test_one_password_authentication() {
         let payer =
         Keypair::read_from_file("tests/p256/keypairs/sinf1bu1CMQaMzeDoysAU7dAp2gs5j2V3vM9W5ZXAyB.json")

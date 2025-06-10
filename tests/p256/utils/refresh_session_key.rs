@@ -41,7 +41,7 @@ pub fn refresh_session_key(
         &webauthn_data.signature,
         &message_data,
         &public_key,
-        Some((1, 7)),
+        None,
     )
     .unwrap();
 

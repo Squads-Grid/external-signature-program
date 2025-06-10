@@ -39,7 +39,7 @@ pub fn authenticate_passkey_account(
         &webauthn_data.signature,
         &message_data,
         &public_key,
-        Some((1, 8)),
+        None
     )
     .unwrap();
 
