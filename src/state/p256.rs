@@ -199,6 +199,7 @@ impl ExternallySignedAccountData for P256WebauthnAccountData {
         self.rp_id_info = args.rp_id_info;
         self.public_key = args.public_key;
         self.counter = args.counter;
+        // Set as default
         self.session_key = args.session_key;
 
         Ok(())
