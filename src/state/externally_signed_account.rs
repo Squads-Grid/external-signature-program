@@ -6,6 +6,7 @@ use num_enum::{IntoPrimitive, TryFromPrimitive};
 use pinocchio::{
     account_info::{AccountInfo, Ref},
     instruction::Seed,
+    msg,
     program_error::ProgramError,
     pubkey::{try_find_program_address, Pubkey, PUBKEY_BYTES},
     seeds,
@@ -132,7 +133,6 @@ pub trait ExternallySignedAccountData: Pod + Zeroable + Clone + Copy {
     fn version() -> u8;
     fn scheme() -> u8;
     fn size() -> usize;
-    fn seeds(&self) -> Result<([Seed; 2], u8), ProgramError>;
     fn verfiy_initialization_payload<'a>(
         &mut self,
         instructions_sysvar_account: &Instructions<Ref<'a, [u8]>>,
@@ -149,17 +149,16 @@ pub trait ExternallySignedAccountData: Pod + Zeroable + Clone + Copy {
     fn update_session_key(&mut self, session_key: SessionKey) -> Result<(), ProgramError>;
 }
 
-pub struct ExecutionAccount<'a> {
+pub struct ExecutionAccount {
     pub key: Pubkey,
     pub bump: u8,
-    pub seeds: [&'a [u8]; 2],
-    pub account_info: &'a AccountInfo,
+    pub seeds: [Vec<u8>; 2],
 }
 
-impl<'a> ExecutionAccount<'a> {
+impl<'a> ExecutionAccount {
     pub fn to_signer_seeds(&self) -> [Seed; 3] {
         let bump_ref = core::slice::from_ref(&self.bump);
-        let seeds = seeds!(self.seeds[0], self.seeds[1], bump_ref);
+        let seeds = seeds!(self.seeds[0].as_slice(), self.seeds[1].as_slice(), bump_ref);
         seeds
     }
 }
@@ -261,9 +260,17 @@ impl<'a, T: ExternallySignedAccountData> ExternallySignedAccount<'a, T> {
     pub fn get_execution_account(
         &self,
         signer_execution_scheme: SignerExecutionScheme,
-    ) -> Result<ExecutionAccount<'a>, ProgramError> {
-        let (execution_account, seeds, bump): (Pubkey, [Vec<u8>; 2], u8) =
+    ) -> Result<ExecutionAccount, ProgramError> {
+        let (executing_account, seeds, bump): (Pubkey, [Vec<u8>; 2], u8) =
             match signer_execution_scheme {
+                SignerExecutionScheme::ExecutionAccount => {
+                    msg!("Execution account");
+                    let seeds = [self.account_info.key().as_slice(), b"execution_account"];
+                    let (execution_account, bump) =
+                        try_find_program_address(&seeds, &crate::ID).unwrap();
+                    let seeds_vec: [Vec<u8>; 2] = seeds.map(|s| s.to_vec());
+                    (execution_account, seeds_vec, bump)
+                }
                 SignerExecutionScheme::ExternalAccount => {
                     let external_account_seeds = self.derive_existing_account()?;
                     let seeds = external_account_seeds.seeds_owned();
@@ -274,24 +281,12 @@ impl<'a, T: ExternallySignedAccountData> ExternallySignedAccount<'a, T> {
                         external_account_seeds.bump(),
                     )
                 }
-                SignerExecutionScheme::ExecutionAccount => {
-                    let seeds = [self.account_info.key().as_ref(), b"execution_account"];
-                    let (execution_account, bump) =
-                        try_find_program_address(&seeds, &crate::ID).unwrap();
-                    let seeds_vec = seeds.map(|s| s.to_vec());
-                    let execution_account = Pubkey::from(execution_account);
-
-                    (execution_account, seeds_vec, bump)
-                }
             };
 
-        let seed_refs: [&[u8]; 2] = [&seeds[0], &seeds[1]];
-
         Ok(ExecutionAccount {
-            key: execution_account,
+            key: executing_account,
             bump,
-            seeds: seed_refs,
-            account_info: self.account_info,
+            seeds,
         })
     }
 

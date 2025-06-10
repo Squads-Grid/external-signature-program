@@ -39,7 +39,7 @@ pub fn authenticate_passkey_account(
         &webauthn_data.signature,
         &message_data,
         &public_key,
-        Some((1, 7)),
+        Some((1, 8)),
     )
     .unwrap();
 
@@ -51,6 +51,7 @@ pub fn authenticate_passkey_account(
     };
 
     let execution_account = get_execution_account(passkey_account.clone(), program_id.clone());
+    println!("execution_account: {:?}", execution_account.to_string());
     svm.airdrop(&execution_account, 1000000000).unwrap();
 
     let memo_instruction = create_memo_instruction();
@@ -61,6 +62,7 @@ pub fn authenticate_passkey_account(
     let serialized_compiled_instruction = serialize_compiled_instruction(compiled_instruction);
     let external_sig_ix_data = ExecutableInstructionArgs {
         signature_scheme: 0,
+        signer_execution_scheme: 0,
         extra_verification_data: SmallVec::<u8, u8>::from(
             to_vec(&extra_verification_data).unwrap(),
         ),

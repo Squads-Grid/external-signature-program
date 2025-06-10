@@ -22,6 +22,8 @@ use crate::{
     utils::{hash, PrecompileParser, Secp256r1Precompile, SmallVec, HASH_LENGTH},
 };
 
+use super::ExecutionAccount;
+
 #[derive(BorshDeserialize, BorshSerialize, Clone)]
 pub struct P256RawInitializationData {
     pub rp_id: SmallVec<u8, u8>,
@@ -274,11 +276,9 @@ impl ExternallySignedAccountData for P256WebauthnAccountData {
             &rp_id,
             &payload,
         );
-        let base_64_payload = general_purpose::URL_SAFE_NO_PAD.encode(&payload);
-        let base_64_reconstructed_client_data =
-            general_purpose::URL_SAFE_NO_PAD.encode(&reconstructed_client_data);
-        sol_log(&base_64_payload);
-        sol_log(&base_64_reconstructed_client_data);
+        // let base_64_payload = general_purpose::URL_SAFE_NO_PAD.encode(&payload);
+        // let base_64_reconstructed_client_data =
+        //     general_purpose::URL_SAFE_NO_PAD.encode(&reconstructed_client_data);
 
         let reconstructed_client_data_hash = hash(&reconstructed_client_data);
 
@@ -318,8 +318,6 @@ impl ExternallySignedAccountData for P256WebauthnAccountData {
         if self.session_key.expiration < clock.unix_timestamp as u64 {
             return Err(ExternalSignatureProgramError::SessionKeyExpired.into());
         }
-        sol_log(format!("Session Key Expiration: {:?}", self.session_key.expiration).as_str());
-        sol_log(format!("Clock Timestamp: {:?}", clock.unix_timestamp).as_str());
         Ok(())
     }
 
