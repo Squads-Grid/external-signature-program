@@ -11,15 +11,15 @@ use crate::{
 };
 
 #[derive(BorshDeserialize, BorshSerialize, Clone)]
-pub struct TruncatedSlot(pub u32);
+pub struct TruncatedSlot(pub u16);
 
 impl TruncatedSlot {
     pub fn new(untruncated_slot: u64) -> Result<Self, ProgramError> {
         let slot = untruncated_slot % 1000;
-        Ok(Self(slot as u32))
+        Ok(Self(slot as u16))
     }
 
-    pub fn get_index_difference(&self, other: &Self) -> Result<u32, ProgramError> {
+    pub fn get_index_difference(&self, other: &Self) -> Result<u16, ProgramError> {
         // Truncated slot should never be greater than a current slot
         self.0
             .checked_sub(other.0)

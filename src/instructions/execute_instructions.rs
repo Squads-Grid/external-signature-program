@@ -1,7 +1,7 @@
-use crate::{state::{
-    AccountSeedsTrait, ExecutionAccount, ExternallySignedAccount, SignatureScheme,
-    SignerExecutionScheme,
-}, utils::{hash, validate_nonce, SlotHashes, TruncatedSlot}};
+use crate::{
+    state::{ExecutionAccount, ExternallySignedAccount, SignatureScheme, SignerExecutionScheme},
+    utils::{hash, validate_nonce, SlotHashes, TruncatedSlot},
+};
 use borsh::{BorshDeserialize, BorshSerialize};
 use num_enum::TryFromPrimitive;
 use pinocchio::{
@@ -94,26 +94,24 @@ impl<'a, T: ExternallySignedAccountData> ExecuteInstructionsContext<'a, T> {
 
         let instruction_execution_account_metas = instruction_execution_accounts
             .iter()
-            .map(
-                |account| match account.key() == &execution_account.key {
-                    // The execution account needs to be set to be a signer for the
-                    // later instruction execution
-                    true => match signer_execution_scheme {
-                        SignerExecutionScheme::ExternalAccount => {
-                            // If we're directly signing with the external
-                            // account, we want to do so with marked as non-mutable
-                            AccountMeta::new(account.key(), false, true)
-                        }
-                        SignerExecutionScheme::ExecutionAccount => {
-                            AccountMeta::new(account.key(), account.is_writable(), true)
-                        }
-                    },
-                    _ => {
-                        // All other accounts, use as they are passed in
-                        AccountMeta::new(account.key(), account.is_writable(), account.is_signer())
+            .map(|account| match account.key() == &execution_account.key {
+                // The execution account needs to be set to be a signer for the
+                // later instruction execution
+                true => match signer_execution_scheme {
+                    SignerExecutionScheme::ExternalAccount => {
+                        // If we're directly signing with the external
+                        // account, we want to do so with marked as non-mutable
+                        AccountMeta::new(account.key(), false, true)
+                    }
+                    SignerExecutionScheme::ExecutionAccount => {
+                        AccountMeta::new(account.key(), account.is_writable(), true)
                     }
                 },
-            )
+                _ => {
+                    // All other accounts, use as they are passed in
+                    AccountMeta::new(account.key(), account.is_writable(), account.is_signer())
+                }
+            })
             .collect();
         Ok(Box::new(Self {
             external_account: external_account,

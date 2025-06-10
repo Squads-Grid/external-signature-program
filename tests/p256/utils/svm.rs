@@ -122,7 +122,7 @@ pub fn get_valid_slothash(svm: &LiteSVM) -> ([u8; 32], TruncatedSlot) {
     // Meaning of life
     let slot = slothashes[42];
     let truncated_slot = slot.0 % 1000;
-    let truncated_slot = TruncatedSlot(truncated_slot as u32);
+    let truncated_slot = TruncatedSlot(truncated_slot as u16);
     println!("Valid slothash: {:?}", truncated_slot.0);
     (slot.1.to_bytes(), truncated_slot)
 }
@@ -131,6 +131,6 @@ pub fn get_expired_slothash(svm: &LiteSVM) -> ([u8; 32], TruncatedSlot) {
     let slothashes = svm.get_sysvar::<SlotHashes>();
     let slot = slothashes[170];
     let truncated_slot = slot.0 % 1000;
-    let truncated_slot = TruncatedSlot(truncated_slot as u32);
+    let truncated_slot = TruncatedSlot(truncated_slot as u16);
     (slot.1.to_bytes(), truncated_slot)
 }

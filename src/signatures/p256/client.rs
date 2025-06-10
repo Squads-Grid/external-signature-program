@@ -1,16 +1,13 @@
-use base64::{
-    engine::general_purpose,
-    Engine as _,
-};
+use base64::{engine::general_purpose, Engine as _};
 use borsh::{BorshDeserialize, BorshSerialize};
-use bytemuck::{Pod, Zeroable};
 
 /// Minimal representation for reconstructing clientDataJson
-#[derive(Clone, Copy, Debug, BorshDeserialize, BorshSerialize, Zeroable, Pod)]
+#[derive(Clone, Copy, Debug, BorshDeserialize, BorshSerialize)]
 #[repr(C)]
 pub struct ClientDataJsonReconstructionParams {
     /// Type and flags packed into a single byte
     pub type_and_flags: u8,
+    pub port: Option<u16>,
 }
 
 impl ClientDataJsonReconstructionParams {
@@ -28,6 +25,7 @@ impl ClientDataJsonReconstructionParams {
         cross_origin: bool,
         is_http: bool,
         has_google_extra: bool,
+        port: Option<u16>,
     ) -> Self {
         let mut value = match auth_type {
             AuthType::Create => Self::TYPE_CREATE,
@@ -46,6 +44,7 @@ impl ClientDataJsonReconstructionParams {
 
         Self {
             type_and_flags: value,
+            port,
         }
     }
 
@@ -93,8 +92,11 @@ pub fn reconstruct_client_data_json(
     } else {
         "https://"
     };
-    let suffix = ":3000";
-    let origin = format!("{}{}{}", prefix, std::str::from_utf8(rp_id).unwrap(), suffix);
+    let origin = if let Some(port) = params.port {
+        format!("{}{}:{}", prefix, std::str::from_utf8(rp_id).unwrap(), port)
+    } else {
+        format!("{}{}", prefix, std::str::from_utf8(rp_id).unwrap())
+    };
     let cross_origin = if params.is_cross_origin() {
         "true"
     } else {
@@ -153,6 +155,7 @@ mod tests {
             false,         // cross_origin
             false,         // is_http
             false,         // has_google_extra
+            None,          // port
         );
         let rp_id = "www.passkeys-debugger.io";
         let challenge = b"hello_world";
@@ -180,6 +183,7 @@ mod tests {
             false,         // cross_origin
             false,         // is_http
             true,          // has_google_extra
+            None,          // port
         );
         let rp_id = "www.passkeys-debugger.io";
         let challenge = b"hello_world";
@@ -194,6 +198,37 @@ mod tests {
         let expected_bytes = general_purpose::URL_SAFE_NO_PAD
             .decode(expected_base64)
             .unwrap();
+
+        // Assert that the result matches the expected bytes
+        assert_eq!(result, expected_bytes);
+    }
+
+    #[test]
+    fn test_reconstruct_client_data_json_with_port() {
+        let params = ClientDataJsonReconstructionParams::new(
+            AuthType::Get, // Based on the provided type in the base64 string
+            false,         // cross_origin
+            true,         // is_http
+            false,         // has_google_extra
+            Some(3000),    // port
+        );
+        let rp_id = "localhost";
+        let challenge = b"hello_world";
+
+        // Call the function
+        let result = reconstruct_client_data_json(&params, rp_id.as_bytes(), challenge);
+
+        // Base64-encoded expected JSON with the port
+        let expected_base64 = "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiYUdWc2JHOWZkMjl5YkdRIiwib3JpZ2luIjoiaHR0cDovL2xvY2FsaG9zdDozMDAwIiwiY3Jvc3NPcmlnaW4iOmZhbHNlfQ";
+
+        // Decode the base64 string to get the expected JSON bytes
+        let expected_bytes = general_purpose::URL_SAFE_NO_PAD
+            .decode(expected_base64)
+            .unwrap();
+
+        // println!("result: {:?}", String::from_utf8(result.clone()).unwrap());
+        // let result_encoded = general_purpose::URL_SAFE_NO_PAD.encode(result.as_slice());
+        // println!("result: {:?}", result_encoded);
 
         // Assert that the result matches the expected bytes
         assert_eq!(result, expected_bytes);
