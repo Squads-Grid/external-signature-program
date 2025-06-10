@@ -18,18 +18,17 @@ pub fn parse_webauthn_fixture(json_data: &str) -> Result<WebAuthnData, Box<dyn s
 
     // Extract and decode the attestationObject
     let signature = match data["response"]["attestationObject"].as_str() {
-        Some(attestation_object) => {
-            parse_signature_from_attestation_object(attestation_object)?
-        }
+        Some(attestation_object) => parse_signature_from_attestation_object(attestation_object)?,
         None => {
-            let signature = data["response"]["signature"].as_str().ok_or("Missing signature")?;
+            let signature = data["response"]["signature"]
+                .as_str()
+                .ok_or("Missing signature")?;
             general_purpose::URL_SAFE_NO_PAD.decode(signature)?
         }
     };
     // Extract the public key
     let compressed_public_key = match data["response"]["publicKey"].as_str() {
         Some(public_key) => {
-
             let (x, y) = decode_ec_public_key(&public_key)?;
             // Calculate Y parity from the complete Y value
             // The parity is determined by whether Y is even or odd
@@ -40,9 +39,7 @@ pub fn parse_webauthn_fixture(json_data: &str) -> Result<WebAuthnData, Box<dyn s
             compressed_key.extend_from_slice(&x);
             Some(compressed_key)
         }
-        None => {
-            None
-        }
+        None => None,
     };
 
     // Extract the message components
@@ -57,19 +54,43 @@ pub fn parse_webauthn_fixture(json_data: &str) -> Result<WebAuthnData, Box<dyn s
     let client_data_json_decoded = general_purpose::URL_SAFE_NO_PAD.decode(client_data_json)?;
 
     // Turn the decoded client data into json
-    let client_data_json_decoded_json: JsonValue = serde_json::from_slice(&client_data_json_decoded)?;
+    let client_data_json_decoded_json: JsonValue =
+        serde_json::from_slice(&client_data_json_decoded)?;
     let auth_type = match client_data_json_decoded_json["type"].as_str() {
         Some("webauthn.create") => AuthType::Create,
         Some("webauthn.get") => AuthType::Get,
         _ => return Err("Invalid auth type".into()),
     };
-    let cross_origin = client_data_json_decoded_json["crossOrigin"].as_bool().unwrap_or(false);
-    let is_http = client_data_json_decoded_json["origin"].as_str().unwrap().starts_with("http://");
-    let has_google_extra = match client_data_json_decoded_json["other_keys_can_be_added_here"].as_str() {
-        Some(_) => true,
-        None => false,
-    };
-    let client_data_reconstruction_params = ClientDataJsonReconstructionParams::new(auth_type, cross_origin, is_http, has_google_extra);
+    let cross_origin = client_data_json_decoded_json["crossOrigin"]
+        .as_bool()
+        .unwrap_or(false);
+    let is_http = client_data_json_decoded_json["origin"]
+        .as_str()
+        .unwrap()
+        .starts_with("http://");
+    let has_google_extra =
+        match client_data_json_decoded_json["other_keys_can_be_added_here"].as_str() {
+            Some(_) => true,
+            None => false,
+        };
+
+    // Extract port from origin URL if present (e.g. http://localhost:3000 or http://somewebsite.com)
+    let port: Option<u16> = client_data_json_decoded_json["origin"]
+        .as_str()
+        .and_then(|s| {
+            s.split("://")
+                .nth(1)
+                .and_then(|host| host.split(":").nth(1))
+                .and_then(|port_str| port_str.parse::<u16>().ok())
+        });
+
+    let client_data_reconstruction_params = ClientDataJsonReconstructionParams::new(
+        auth_type,
+        cross_origin,
+        is_http,
+        has_google_extra,
+        port,
+    );
     // Return the extracted data
     Ok(WebAuthnData {
         signature,

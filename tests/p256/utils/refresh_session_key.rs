@@ -46,7 +46,7 @@ pub fn refresh_session_key(
     .unwrap();
 
     let client_data_json_reconstruction_params =
-        ClientDataJsonReconstructionParams::new(AuthType::Get, false, false, false);
+        ClientDataJsonReconstructionParams::new(AuthType::Get, false, false, false, None);
     let extra_verification_data = P256RawVerificationData {
         public_key: public_key.clone().try_into().unwrap(),
         client_data_json_reconstruction_params,
