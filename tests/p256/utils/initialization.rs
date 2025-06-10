@@ -74,6 +74,7 @@ pub fn initialize_passkey_account(
         signature_scheme: SignatureScheme::P256Webauthn.into(),
         initialization_data: SmallVec::<u8, u8>::try_from(to_vec(&p256_webauthn_args).unwrap())
             .unwrap(),
+        session_key: None,
     };
 
     let mut instruction_data = Vec::with_capacity(1 + 1 + public_key.len() + 1 + rp_id.len());

@@ -6,6 +6,7 @@ use num_enum::{IntoPrimitive, TryFromPrimitive};
 use pinocchio::{
     account_info::{AccountInfo, Ref},
     instruction::Seed,
+    msg,
     program_error::ProgramError,
     pubkey::{try_find_program_address, Pubkey, PUBKEY_BYTES},
     seeds,
@@ -59,10 +60,50 @@ pub enum SignatureScheme {
     // more schemes here
 }
 
+#[derive(TryFromPrimitive, IntoPrimitive, PartialEq, Eq, Debug, Clone, Copy)]
+#[repr(u8)]
+pub enum SignerExecutionScheme {
+    /// Uses the derived execution account as the signer (legacy/default behavior)
+    /// Useful for system operations like paying rent
+    ExecutionAccount = 0,
+
+    /// Uses the externally signed account directly as the signer
+    /// More efficient for smart account operations
+    ExternalAccount = 1,
+}
+
 pub trait AccountSeedsTrait {
     fn key(&self) -> &Pubkey;
     fn bump(&self) -> u8;
     fn seeds(&self) -> Vec<&[u8]>;
+    fn seeds_owned(&self) -> [Vec<u8>; 2];
+}
+
+pub struct AccountSeeds {
+    pub key: Pubkey,
+    pub bump: u8,
+    pub(crate) seed_passkey: &'static [u8],
+    pub(crate) seed_public_key_hash: [u8; 32],
+}
+
+impl AccountSeedsTrait for AccountSeeds {
+    fn key(&self) -> &Pubkey {
+        &self.key
+    }
+    fn bump(&self) -> u8 {
+        self.bump
+    }
+    fn seeds(&self) -> Vec<&[u8]> {
+        vec![
+            self.seed_passkey,
+            &self.seed_public_key_hash,
+            core::slice::from_ref(&self.bump),
+        ]
+    }
+    fn seeds_owned(&self) -> [Vec<u8>; 2] {
+        let seeds = [self.seed_passkey, &self.seed_public_key_hash];
+        seeds.map(|s| s.to_vec())
+    }
 }
 
 pub trait ExternallySignedAccountData: Pod + Zeroable + Clone + Copy {
@@ -80,12 +121,15 @@ pub trait ExternallySignedAccountData: Pod + Zeroable + Clone + Copy {
         &mut self,
         args: &Self::ParsedInitializationData,
     ) -> Result<(), ProgramError>;
-    fn check_account(
+    fn check_account<'a>(
         &self,
         account_info: &AccountInfo,
         args: &Self::ParsedVerificationData,
     ) -> Result<Self::AccountSeeds, ProgramError>;
-    fn derive_account(args: Self::DeriveAccountArgs) -> Result<Self::AccountSeeds, ProgramError>;
+    fn derive_account<'a>(
+        args: Self::DeriveAccountArgs,
+    ) -> Result<Self::AccountSeeds, ProgramError>;
+    fn derive_existing_account<'a>(&self) -> Result<Self::AccountSeeds, ProgramError>;
     fn version() -> u8;
     fn scheme() -> u8;
     fn size() -> usize;
@@ -105,16 +149,16 @@ pub trait ExternallySignedAccountData: Pod + Zeroable + Clone + Copy {
     fn update_session_key(&mut self, session_key: SessionKey) -> Result<(), ProgramError>;
 }
 
-pub struct ExecutionAccount<'a> {
+pub struct ExecutionAccount {
     pub key: Pubkey,
     pub bump: u8,
-    pub seeds: [&'a [u8]; 2],
+    pub seeds: [Vec<u8>; 2],
 }
 
-impl<'a> ExecutionAccount<'a> {
+impl<'a> ExecutionAccount {
     pub fn to_signer_seeds(&self) -> [Seed; 3] {
         let bump_ref = core::slice::from_ref(&self.bump);
-        let seeds = seeds!(self.seeds[0], self.seeds[1], bump_ref);
+        let seeds = seeds!(self.seeds[0].as_slice(), self.seeds[1].as_slice(), bump_ref);
         seeds
     }
 }
@@ -213,16 +257,37 @@ impl<'a, T: ExternallySignedAccountData> ExternallySignedAccount<'a, T> {
         T::get_initialization_payload()
     }
 
-    pub fn get_execution_account(&self) -> ExecutionAccount<'a> {
-        let (execution_account, bump) =
-            try_find_program_address(&[self.account_info.key(), b"execution_account"], &crate::ID)
-                .unwrap();
-        let account_info_key = self.account_info.key();
-        ExecutionAccount {
-            key: execution_account,
+    pub fn get_execution_account(
+        &self,
+        signer_execution_scheme: SignerExecutionScheme,
+    ) -> Result<ExecutionAccount, ProgramError> {
+        let (executing_account, seeds, bump): (Pubkey, [Vec<u8>; 2], u8) =
+            match signer_execution_scheme {
+                SignerExecutionScheme::ExecutionAccount => {
+                    msg!("Execution account");
+                    let seeds = [self.account_info.key().as_slice(), b"execution_account"];
+                    let (execution_account, bump) =
+                        try_find_program_address(&seeds, &crate::ID).unwrap();
+                    let seeds_vec: [Vec<u8>; 2] = seeds.map(|s| s.to_vec());
+                    (execution_account, seeds_vec, bump)
+                }
+                SignerExecutionScheme::ExternalAccount => {
+                    let external_account_seeds = self.derive_existing_account()?;
+                    let seeds = external_account_seeds.seeds_owned();
+
+                    (
+                        external_account_seeds.key().to_owned(),
+                        seeds,
+                        external_account_seeds.bump(),
+                    )
+                }
+            };
+
+        Ok(ExecutionAccount {
+            key: executing_account,
             bump,
-            seeds: [account_info_key.as_ref(), b"execution_account"],
-        }
+            seeds,
+        })
     }
 
     pub fn size() -> usize {
@@ -242,6 +307,11 @@ impl<'a, T: ExternallySignedAccountData> ExternallySignedAccount<'a, T> {
         T::derive_account(args)
     }
 
+    pub fn derive_existing_account(&self) -> Result<T::AccountSeeds, ProgramError> {
+        let data = self.data()?;
+        T::derive_existing_account(data)
+    }
+
     pub fn check_account(
         &self,
         args: &T::ParsedVerificationData,
@@ -249,6 +319,7 @@ impl<'a, T: ExternallySignedAccountData> ExternallySignedAccount<'a, T> {
         let data = self.data()?;
         T::check_account(&data, self.account_info, args)
     }
+
     pub fn data(&self) -> Result<&'a mut T, ProgramError> {
         let header = self.header();
 

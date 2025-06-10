@@ -58,6 +58,12 @@ pub enum ExternalSignatureProgramError {
     #[error("Invalid signature scheme")]
     InvalidSignatureScheme,
 
+    /// Signer Execution Scheme Related Errors
+    #[error("Invalid signer execution scheme")]
+    InvalidSignerExecutionScheme,
+    #[error("Signer execution account is not a signer")]
+    SignerExecutionAccountNotASigner,
+
     /// P256 WebAuthn Related Errors
     #[error("Relying party mismatch")]
     RelyingPartyMismatch,

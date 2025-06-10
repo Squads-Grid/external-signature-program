@@ -13,10 +13,13 @@ use crate::{
     errors::ExternalSignatureProgramError,
     state::{
         AccountSeedsTrait, ExternallySignedAccount, ExternallySignedAccountData,
-        P256WebauthnAccountData, SignatureScheme,
+        P256WebauthnAccountData, SessionKey, SignatureScheme,
     },
-    utils::nonce::{validate_nonce, TruncatedSlot},
-    utils::{hash, SlotHashes, SmallVec},
+    utils::{
+        hash,
+        nonce::{validate_nonce, TruncatedSlot},
+        SlotHashes, SmallVec,
+    },
 };
 
 pub struct InitializeAccounts<'a, T: ExternallySignedAccountData> {
@@ -33,6 +36,7 @@ pub struct InitializeExternalAccountContext<'a, T: ExternallySignedAccountData> 
     pub external_account_seeds: T::AccountSeeds,
     pub signature_scheme_specific_initialization_data: T::ParsedInitializationData,
     pub slothash: [u8; 32],
+    pub session_key: Option<SessionKey>,
 }
 
 #[derive(BorshDeserialize, BorshSerialize)]
@@ -40,6 +44,7 @@ pub struct InitializeAccountArgs {
     pub slothash: TruncatedSlot,
     pub signature_scheme: u8,
     pub initialization_data: SmallVec<u8, u8>,
+    pub session_key: Option<SessionKey>,
 }
 
 impl<'a, T: ExternallySignedAccountData> InitializeExternalAccountContext<'a, T> {
@@ -108,6 +113,7 @@ impl<'a, T: ExternallySignedAccountData> InitializeExternalAccountContext<'a, T>
             external_account_seeds,
             signature_scheme_specific_initialization_data: parsed_initialization_data,
             slothash: nonce_data.slothash,
+            session_key: args.session_key,
         })
     }
 
@@ -144,12 +150,17 @@ impl<'a, T: ExternallySignedAccountData> InitializeExternalAccountContext<'a, T>
     fn get_initialization_payload_hash<'b>(
         &self,
         signature_specific_initialization_payload: &'b [u8],
+        session_key: Option<&SessionKey>,
     ) -> [u8; 32] {
         let mut payload_bytes =
             Vec::with_capacity(signature_specific_initialization_payload.len() + 32 + 32);
         payload_bytes.extend_from_slice(&self.slothash);
         payload_bytes.extend_from_slice(self.accounts.rent_payer.key());
         payload_bytes.extend_from_slice(&signature_specific_initialization_payload);
+        if let Some(session_key) = session_key {
+            payload_bytes.extend_from_slice(&session_key.key);
+            payload_bytes.extend_from_slice(&session_key.expiration.to_le_bytes());
+        }
         hash(&payload_bytes)
     }
 }
@@ -173,8 +184,10 @@ pub fn process_initialize_external_account(accounts: &[AccountInfo], data: &[u8]
         .external_account
         .get_initialization_payload();
 
-    let initialization_payload_hash = initialization_context
-        .get_initialization_payload_hash(signature_specific_initialization_payload);
+    let initialization_payload_hash = initialization_context.get_initialization_payload_hash(
+        signature_specific_initialization_payload,
+        initialization_context.session_key.as_ref(),
+    );
 
     initialization_context.create_and_allocate_account()?;
 
@@ -183,6 +196,10 @@ pub fn process_initialize_external_account(accounts: &[AccountInfo], data: &[u8]
     externally_owned_account.initialize_account(
         &initialization_context.signature_scheme_specific_initialization_data,
     )?;
+
+    if let Some(session_key) = initialization_context.session_key {
+        externally_owned_account.update_session_key(session_key)?;
+    }
 
     externally_owned_account.verfiy_initialization_payload(
         &initialization_context.accounts.instructions_sysvar,

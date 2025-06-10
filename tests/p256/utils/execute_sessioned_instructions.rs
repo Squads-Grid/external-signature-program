@@ -29,6 +29,7 @@ pub fn execute_sessioned_instructions(
     let serialized_compiled_instruction = serialize_compiled_instruction(compiled_instruction);
     let external_sig_ix_data = ExecutableInstructionSessionedArgs {
         signature_scheme: 0,
+        signer_execution_scheme: 0,
         instructions: serialized_compiled_instruction,
     };
     let mut serialized_ix_data: Vec<u8> = vec![];

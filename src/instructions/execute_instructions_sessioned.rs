@@ -11,14 +11,16 @@ use pinocchio::{
 use crate::{
     errors::ExternalSignatureProgramError,
     instructions::CompiledInstruction,
-    state::{ExecutionAccount, ExternallySignedAccount, SignatureScheme},
-    state::{ExternallySignedAccountData, P256WebauthnAccountData},
+    state::{
+        ExecutionAccount, ExternallySignedAccount, ExternallySignedAccountData,
+        P256WebauthnAccountData, SignatureScheme, SignerExecutionScheme,
+    },
     utils::SmallVec,
 };
 
 pub struct ExecuteInstructionsSessionedContext<'a, T: ExternallySignedAccountData> {
     pub external_account: Box<ExternallySignedAccount<'a, T>>,
-    pub execution_account: ExecutionAccount<'a>,
+    pub execution_account: ExecutionAccount,
     pub session_signer: &'a AccountInfo,
     pub instructions: Box<&'a [CompiledInstruction]>,
     pub instruction_execution_accounts: Box<&'a [AccountInfo]>,
@@ -28,6 +30,7 @@ pub struct ExecuteInstructionsSessionedContext<'a, T: ExternallySignedAccountDat
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct ExecutableInstructionSessionedArgs {
     pub signature_scheme: u8,
+    pub signer_execution_scheme: u8,
     pub instructions: SmallVec<u8, CompiledInstruction>,
 }
 
@@ -48,8 +51,12 @@ impl<'a, T: ExternallySignedAccountData> ExecuteInstructionsSessionedContext<'a,
             return Err(ProgramError::NotEnoughAccountKeys);
         };
 
+        let signer_execution_scheme =
+            SignerExecutionScheme::try_from_primitive(execution_args.signer_execution_scheme)
+                .map_err(|_| ExternalSignatureProgramError::InvalidSignerExecutionScheme)?;
+
         let external_account = ExternallySignedAccount::<T>::new(external_account)?;
-        let external_execution_account = external_account.get_execution_account();
+        let executing_account = external_account.get_execution_account(signer_execution_scheme)?;
 
         if !session_signer.is_signer() {
             return Err(ExternalSignatureProgramError::SessionSignerNotASigner.into());
@@ -57,21 +64,29 @@ impl<'a, T: ExternallySignedAccountData> ExecuteInstructionsSessionedContext<'a,
 
         let instruction_execution_account_metas = instruction_execution_accounts
             .iter()
-            .map(
-                |account| match account.key() == &external_execution_account.key {
-                    // The execution account needs to be set to be a signer for the
-                    // later instruction execution
-                    true => AccountMeta::new(account.key(), account.is_writable(), true),
-                    _ => {
-                        AccountMeta::new(account.key(), account.is_writable(), account.is_signer())
+            .map(|account| match account.key() == &executing_account.key {
+                // The execution account needs to be set to be a signer for the
+                // later instruction execution
+                true => match signer_execution_scheme {
+                    SignerExecutionScheme::ExternalAccount => {
+                        // If we're directly signing with the external
+                        // account, we want to do so with marked as non-mutable
+                        AccountMeta::new(account.key(), false, true)
+                    }
+                    SignerExecutionScheme::ExecutionAccount => {
+                        AccountMeta::new(account.key(), account.is_writable(), true)
                     }
                 },
-            )
+                _ => {
+                    // All other accounts, use as they are passed in
+                    AccountMeta::new(account.key(), account.is_writable(), account.is_signer())
+                }
+            })
             .collect();
 
         Ok(Box::new(Self {
             external_account: Box::new(external_account),
-            execution_account: external_execution_account,
+            execution_account: executing_account,
             session_signer,
             instruction_execution_accounts: Box::new(instruction_execution_accounts),
             instruction_execution_account_metas: Box::new(instruction_execution_account_metas),

@@ -3,9 +3,11 @@ use borsh::{BorshDeserialize, BorshSerialize};
 use bytemuck::{Pod, Zeroable};
 use pinocchio::{
     account_info::{AccountInfo, Ref},
+    instruction::{Seed, Signer},
     log::sol_log,
     program_error::ProgramError,
     pubkey::{try_find_program_address, Pubkey},
+    seeds,
     sysvars::{clock::Clock, instructions::Instructions, Sysvar},
 };
 
@@ -15,11 +17,12 @@ use crate::{
         reconstruct_client_data_json, AuthDataParser, ClientDataJsonReconstructionParams,
     },
     state::{
-        AccountHeader, AccountSeedsTrait, ExternallySignedAccountData, SessionKey, SignatureScheme,
-        SESSION_KEY_EXPIRATION_LIMIT,
+        AccountHeader, AccountSeeds, AccountSeedsTrait, ExternallySignedAccountData, SessionKey, SignatureScheme, SESSION_KEY_EXPIRATION_LIMIT
     },
     utils::{hash, PrecompileParser, Secp256r1Precompile, SmallVec, HASH_LENGTH},
 };
+
+use super::ExecutionAccount;
 
 #[derive(BorshDeserialize, BorshSerialize, Clone)]
 pub struct P256RawInitializationData {
@@ -159,29 +162,6 @@ impl RpIdInformation {
     }
 }
 
-pub struct AccountSeeds {
-    pub key: Pubkey,
-    pub bump: u8,
-    seed_passkey: &'static [u8],
-    seed_public_key_hash: [u8; 32],
-}
-
-impl AccountSeedsTrait for AccountSeeds {
-    fn key(&self) -> &Pubkey {
-        &self.key
-    }
-    fn bump(&self) -> u8 {
-        self.bump
-    }
-    fn seeds(&self) -> Vec<&[u8]> {
-        vec![
-            self.seed_passkey,
-            &self.seed_public_key_hash,
-            core::slice::from_ref(&self.bump),
-        ]
-    }
-}
-
 impl ExternallySignedAccountData for P256WebauthnAccountData {
     type AccountSeeds = AccountSeeds;
     type DeriveAccountArgs = P256DeriveAccountArgs;
@@ -219,15 +199,17 @@ impl ExternallySignedAccountData for P256WebauthnAccountData {
         self.rp_id_info = args.rp_id_info;
         self.public_key = args.public_key;
         self.counter = args.counter;
+        // Set as default
         self.session_key = args.session_key;
 
         Ok(())
     }
 
-    fn derive_account<'a>(args: Self::DeriveAccountArgs) -> Result<AccountSeeds, ProgramError> {
+    fn derive_account(args: Self::DeriveAccountArgs) -> Result<Self::AccountSeeds, ProgramError> {
         let public_key_hash = hash(&args.public_key);
-        let seeds: [&[u8]; 2] = [b"passkey", &public_key_hash];
-        let (derived_key, bump) = try_find_program_address(&seeds, &crate::ID).unwrap();
+        let (derived_key, bump) =
+            try_find_program_address(&[b"passkey", &public_key_hash], &crate::ID).unwrap();
+
         Ok(AccountSeeds {
             key: derived_key,
             bump,
@@ -236,7 +218,15 @@ impl ExternallySignedAccountData for P256WebauthnAccountData {
         })
     }
 
-    fn check_account<'a>(
+    fn derive_existing_account(&self) -> Result<Self::AccountSeeds, ProgramError> {
+        let seeds = Self::derive_account(Self::DeriveAccountArgs {
+            public_key: self.public_key.to_bytes(),
+        })?;
+
+        Ok(seeds)
+    }
+
+    fn check_account(
         &self,
         account_info: &AccountInfo,
         _args: &Self::ParsedVerificationData,
@@ -287,11 +277,9 @@ impl ExternallySignedAccountData for P256WebauthnAccountData {
             &rp_id,
             &payload,
         );
-        let base_64_payload = general_purpose::URL_SAFE_NO_PAD.encode(&payload);
-        let base_64_reconstructed_client_data =
-            general_purpose::URL_SAFE_NO_PAD.encode(&reconstructed_client_data);
-        sol_log(&base_64_payload);
-        sol_log(&base_64_reconstructed_client_data);
+        // let base_64_payload = general_purpose::URL_SAFE_NO_PAD.encode(&payload);
+        // let base_64_reconstructed_client_data =
+        //     general_purpose::URL_SAFE_NO_PAD.encode(&reconstructed_client_data);
 
         let reconstructed_client_data_hash = hash(&reconstructed_client_data);
 
@@ -331,8 +319,6 @@ impl ExternallySignedAccountData for P256WebauthnAccountData {
         if self.session_key.expiration < clock.unix_timestamp as u64 {
             return Err(ExternalSignatureProgramError::SessionKeyExpired.into());
         }
-        sol_log(format!("Session Key Expiration: {:?}", self.session_key.expiration).as_str());
-        sol_log(format!("Clock Timestamp: {:?}", clock.unix_timestamp).as_str());
         Ok(())
     }
 

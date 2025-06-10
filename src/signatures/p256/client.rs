@@ -93,7 +93,8 @@ pub fn reconstruct_client_data_json(
     } else {
         "https://"
     };
-    let origin = format!("{}{}", prefix, std::str::from_utf8(rp_id).unwrap());
+    let suffix = ":3000";
+    let origin = format!("{}{}{}", prefix, std::str::from_utf8(rp_id).unwrap(), suffix);
     let cross_origin = if params.is_cross_origin() {
         "true"
     } else {

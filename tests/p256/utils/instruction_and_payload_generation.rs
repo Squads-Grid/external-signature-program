@@ -22,9 +22,8 @@ use crate::{
 };
 
 pub fn get_execution_account(account: Pubkey, program_id: Pubkey) -> Pubkey {
-    let (execution_account, _bump) =
-        Pubkey::try_find_program_address(&[account.as_ref(), b"execution_account"], &program_id)
-            .unwrap();
+    let seeds = [account.as_ref(), b"execution_account"];
+    let (execution_account, _bump) = Pubkey::try_find_program_address(&seeds, &program_id).unwrap();
     execution_account
 }
 pub fn serialize_compiled_instruction(
