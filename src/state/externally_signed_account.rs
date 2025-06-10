@@ -120,6 +120,7 @@ pub trait ExternallySignedAccountData: Pod + Zeroable + Clone + Copy {
     fn initialize_account(
         &mut self,
         args: &Self::ParsedInitializationData,
+        session_key: Option<SessionKey>,
     ) -> Result<(), ProgramError>;
     fn check_account<'a>(
         &self,
@@ -200,10 +201,11 @@ impl<'a, T: ExternallySignedAccountData> ExternallySignedAccount<'a, T> {
     pub fn initialize_account(
         &mut self,
         args: &T::ParsedInitializationData,
+        session_key: Option<SessionKey>,
     ) -> Result<(), ProgramError> {
         self.initialize_header();
         let data = self.data()?;
-        T::initialize_account(data, &args)?;
+        T::initialize_account(data, &args, session_key)?;
         Ok(())
     }
 

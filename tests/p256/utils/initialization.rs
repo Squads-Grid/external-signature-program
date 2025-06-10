@@ -66,7 +66,6 @@ pub fn initialize_passkey_account(
         client_data_json_reconstruction_params: webauthn_data
             .client_data_json_reconstruction_params
             .into(),
-        session_key: None,
     };
 
     let initialize_args = InitializeAccountArgs {

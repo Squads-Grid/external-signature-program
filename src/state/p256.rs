@@ -1,13 +1,9 @@
-use base64::{engine::general_purpose, Engine};
 use borsh::{BorshDeserialize, BorshSerialize};
 use bytemuck::{Pod, Zeroable};
 use pinocchio::{
     account_info::{AccountInfo, Ref},
-    instruction::{Seed, Signer},
-    log::sol_log,
     program_error::ProgramError,
     pubkey::{try_find_program_address, Pubkey},
-    seeds,
     sysvars::{clock::Clock, instructions::Instructions, Sysvar},
 };
 
@@ -17,19 +13,18 @@ use crate::{
         reconstruct_client_data_json, AuthDataParser, ClientDataJsonReconstructionParams,
     },
     state::{
-        AccountHeader, AccountSeeds, AccountSeedsTrait, ExternallySignedAccountData, SessionKey, SignatureScheme, SESSION_KEY_EXPIRATION_LIMIT
+        AccountHeader, AccountSeeds, ExternallySignedAccountData, SessionKey,
+        SignatureScheme, SESSION_KEY_EXPIRATION_LIMIT,
     },
     utils::{hash, PrecompileParser, Secp256r1Precompile, SmallVec, HASH_LENGTH},
 };
 
-use super::ExecutionAccount;
 
 #[derive(BorshDeserialize, BorshSerialize, Clone)]
 pub struct P256RawInitializationData {
     pub rp_id: SmallVec<u8, u8>,
     pub public_key: [u8; 33],
     pub client_data_json_reconstruction_params: ClientDataJsonReconstructionParams,
-    pub session_key: Option<SessionKey>,
 }
 
 #[derive(BorshDeserialize, BorshSerialize, Clone, Copy)]
@@ -39,7 +34,6 @@ pub struct P256ParsedInitializationData {
     pub public_key: CompressedP256PublicKey,
     pub counter: u64,
     pub client_data_json_reconstruction_params: ClientDataJsonReconstructionParams,
-    pub session_key: SessionKey,
 }
 
 impl From<P256RawInitializationData> for P256ParsedInitializationData {
@@ -50,7 +44,6 @@ impl From<P256RawInitializationData> for P256ParsedInitializationData {
             public_key: CompressedP256PublicKey::new(&data.public_key),
             counter: 0,
             client_data_json_reconstruction_params: data.client_data_json_reconstruction_params,
-            session_key: data.session_key.unwrap_or_default(),
         }
     }
 }
@@ -189,18 +182,21 @@ impl ExternallySignedAccountData for P256WebauthnAccountData {
     fn initialize_account(
         &mut self,
         args: &Self::ParsedInitializationData,
+        session_key: Option<SessionKey>,
     ) -> Result<(), ProgramError> {
-        if args.session_key.expiration
-            > Clock::get()?.unix_timestamp as u64 + SESSION_KEY_EXPIRATION_LIMIT
-        {
-            return Err(ExternalSignatureProgramError::InvalidSessionKeyExpiration.into());
-        }
-
         self.rp_id_info = args.rp_id_info;
         self.public_key = args.public_key;
         self.counter = args.counter;
-        // Set as default
-        self.session_key = args.session_key;
+
+        if let Some(session_key) = session_key {
+            if session_key.expiration
+                > Clock::get()?.unix_timestamp as u64 + SESSION_KEY_EXPIRATION_LIMIT
+            {
+                return Err(ExternalSignatureProgramError::InvalidSessionKeyExpiration.into());
+            }
+
+            self.session_key = session_key;
+        }
 
         Ok(())
     }

@@ -195,11 +195,8 @@ pub fn process_initialize_external_account(accounts: &[AccountInfo], data: &[u8]
 
     externally_owned_account.initialize_account(
         &initialization_context.signature_scheme_specific_initialization_data,
+        initialization_context.session_key,
     )?;
-
-    if let Some(session_key) = initialization_context.session_key {
-        externally_owned_account.update_session_key(session_key)?;
-    }
 
     externally_owned_account.verfiy_initialization_payload(
         &initialization_context.accounts.instructions_sysvar,
