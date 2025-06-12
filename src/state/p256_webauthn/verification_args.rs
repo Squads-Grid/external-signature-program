@@ -1,4 +1,5 @@
 use borsh::{BorshDeserialize, BorshSerialize};
+use pinocchio::program_error::ProgramError;
 
 use crate::utils::signatures::ClientDataJsonReconstructionParams;
 
@@ -16,11 +17,13 @@ pub struct P256ParsedVerificationData {
     pub client_data_json_reconstruction_params: ClientDataJsonReconstructionParams,
 }
 
-impl From<P256RawVerificationData> for P256ParsedVerificationData {
-    fn from(data: P256RawVerificationData) -> Self {
-        Self {
+impl TryFrom<P256RawVerificationData> for P256ParsedVerificationData {
+    type Error = ProgramError;
+
+    fn try_from(data: P256RawVerificationData) -> Result<Self, ProgramError> {
+        Ok(Self {
             public_key: CompressedP256PublicKey::new(&data.public_key),
             client_data_json_reconstruction_params: data.client_data_json_reconstruction_params,
-        }
+        })
     }
 }

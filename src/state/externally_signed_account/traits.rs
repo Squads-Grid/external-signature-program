@@ -25,8 +25,8 @@ pub trait ExternallySignedAccountData: Pod + Zeroable + Clone + Copy {
 
     type RawInitializationData: BorshDeserialize;
     type RawVerificationData: BorshDeserialize;
-    type ParsedInitializationData: From<Self::RawInitializationData>;
-    type ParsedVerificationData: From<Self::RawVerificationData>;
+    type ParsedInitializationData: TryFrom<Self::RawInitializationData, Error = ProgramError>;
+    type ParsedVerificationData: TryFrom<Self::RawVerificationData, Error = ProgramError>;
 
     /// Returns the version of the account
     fn version() -> u8;

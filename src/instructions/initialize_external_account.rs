@@ -93,7 +93,8 @@ impl<'a, T: ExternallySignedAccountData> InitializeExternalAccountContext<'a, T>
         let raw_initialization_data =
             T::RawInitializationData::try_from_slice(&args.initialization_data.as_slice())
                 .map_err(|_| ProgramError::InvalidArgument)?;
-        let parsed_initialization_data = T::ParsedInitializationData::from(raw_initialization_data);
+        let parsed_initialization_data =
+            T::ParsedInitializationData::try_from(raw_initialization_data)?;
 
         // Derive the account seeds
         let derive_args = T::DeriveAccountArgs::from(&parsed_initialization_data);

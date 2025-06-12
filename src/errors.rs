@@ -67,6 +67,8 @@ pub enum ExternalSignatureProgramError {
     SignerExecutionAccountNotASigner,
 
     /// P256 WebAuthn Related Errors
+    #[error("Relying party ID too long. Max length is 32 bytes")]
+    P256RelyingPartTooLong,
     #[error("Relying party mismatch")]
     P256RelyingPartyMismatch,
     #[error("Client data hash mismatch")]

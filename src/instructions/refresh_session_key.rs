@@ -72,7 +72,8 @@ impl<'a, T: ExternallySignedAccountData> RefreshSessionKeyContext<'a, T> {
         let verification_args =
             T::RawVerificationData::try_from_slice(&args.verification_data.as_slice())
                 .map_err(|_| ExternalSignatureProgramError::InvalidExtraVerificationDataArgs)?;
-        let parsed_verification_data = T::ParsedVerificationData::from(verification_args);
+        let parsed_verification_data: <T as ExternallySignedAccountData>::ParsedVerificationData = T::ParsedVerificationData::try_from(verification_args)
+            .map_err(|_| ExternalSignatureProgramError::InvalidExtraVerificationDataArgs)?;
 
         // Load and check the relevant accounts
         let externally_signed_account =

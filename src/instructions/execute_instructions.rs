@@ -81,7 +81,7 @@ impl<'a, T: ExternallySignedAccountData> ExecuteInstructionsContext<'a, T> {
             &execution_args.extra_verification_data.as_slice(),
         )
         .map_err(|_| ExternalSignatureProgramError::InvalidExtraVerificationDataArgs)?;
-        let parsed_verification_data = T::ParsedVerificationData::from(args);
+        let parsed_verification_data = T::ParsedVerificationData::try_from(args)?;
 
         // Load and check the relevant accounts
         let externally_signed_account =
