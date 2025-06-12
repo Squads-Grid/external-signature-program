@@ -1,7 +1,6 @@
 use std::io::{Read, Write};
 use std::marker::PhantomData;
 
-
 use borsh::{BorshDeserialize, BorshSerialize};
 
 /// Concise serialization schema for vectors where the length can be represented
@@ -26,7 +25,6 @@ impl<L, T> SmallVec<L, T> {
     pub fn as_slice(&self) -> &[T] {
         self.0.as_slice()
     }
-
 }
 
 impl<L, T> From<SmallVec<L, T>> for Vec<T> {

@@ -2,32 +2,40 @@ use std::convert::TryInto;
 
 use crate::errors::ExternalSignatureProgramError;
 
+/// Wrapper for parsing webauthn authenticator data
 pub struct AuthDataParser<'a> {
     auth_data: &'a [u8],
 }
 
 impl<'a> AuthDataParser<'a> {
+    /// Creates a new AuthDataParser
     pub fn new(auth_data: &'a [u8]) -> Self {
         Self { auth_data }
     }
 
+    /// Gets the RP ID hash
     pub fn rp_id_hash(&self) -> &'a [u8] {
         &self.auth_data[0..32]
     }
 
+    /// Checks if the user is present based on the flags
     pub fn is_user_present(&self) -> bool {
         // User presence is indicated by the first bit of the flags byte
         self.auth_data[32] & 0x01 != 0
     }
 
+    /// Checks if the user is verified based on the flags
     pub fn is_user_verified(&self) -> bool {
         // User verification is indicated by the second bit of the flags byte
         self.auth_data[32] & 0x04 != 0
     }
+
+    /// Gets the counter from the authenticator data
     pub fn get_counter(&self) -> u32 {
         u32::from_be_bytes(self.auth_data[33..37].try_into().unwrap())
     }
 
+    /// Verifies and parses the public key from the authenticator data
     pub fn verify_and_parse_public_key(&self) -> Result<[u8; 33], ExternalSignatureProgramError> {
         // Parse credential data sections
         let attested_cred_data_start = 37; // rpIdHash(32) + flags(1) + counter(4)
@@ -46,7 +54,7 @@ impl<'a> AuthDataParser<'a> {
 
         // We expect CBOR to start with a map (0xa#) where # is the number of items
         if cbor_start >= self.auth_data.len() || (self.auth_data[cbor_start] & 0xF0) != 0xA0 {
-            return Err(ExternalSignatureProgramError::InvalidPublicKeyEncoding);
+            return Err(ExternalSignatureProgramError::P256InvalidPublicKeyEncoding);
         }
 
         // Check for algorithm (-7)
@@ -60,7 +68,7 @@ impl<'a> AuthDataParser<'a> {
         }
 
         if !alg_found {
-            return Err(ExternalSignatureProgramError::InvalidAlgorithm);
+            return Err(ExternalSignatureProgramError::P256InvalidAlgorithm);
         }
 
         // Find the x-coordinate by looking for key -2 (0x21) followed by byte string marker (0x58 0x20)
@@ -93,7 +101,7 @@ impl<'a> AuthDataParser<'a> {
             || x_start + 32 > self.auth_data.len()
             || y_start + 32 > self.auth_data.len()
         {
-            return Err(ExternalSignatureProgramError::InvalidPublicKeyEncoding);
+            return Err(ExternalSignatureProgramError::P256InvalidPublicKeyEncoding);
         }
 
         // Extract x coordinate

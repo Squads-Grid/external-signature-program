@@ -1,3 +1,5 @@
+use std::{any::type_name, panic::Location};
+
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 use pinocchio::{program_error::ProgramError, ProgramResult};
 use pinocchio_log::log;
@@ -65,33 +67,36 @@ pub enum ExternalSignatureProgramError {
     SignerExecutionAccountNotASigner,
 
     /// P256 WebAuthn Related Errors
+    #[error("Relying party ID too long. Max length is 32 bytes")]
+    P256RelyingPartTooLong,
     #[error("Relying party mismatch")]
-    RelyingPartyMismatch,
+    P256RelyingPartyMismatch,
     #[error("Client data hash mismatch")]
-    ClientDataHashMismatch,
+    P256ClientDataHashMismatch,
     #[error("Account is not writable")]
-    AccountNotWritable,
+    P256AccountNotWritable,
     #[error("Invalid passkey Algorithm")]
-    InvalidAlgorithm,
+    P256InvalidAlgorithm,
     #[error("Invalid public key encoding")]
-    InvalidPublicKeyEncoding,
+    P256InvalidPublicKeyEncoding,
+    #[error("Public key mismatch")]
+    P256PublicKeyMismatch,
+    #[error("User not verified")]
+    P256UserNotVerified,
+    #[error("User not present")]
+    P256UserNotPresent,
 }
 
 impl From<ExternalSignatureProgramError> for ProgramError {
+    #[track_caller]
     fn from(e: ExternalSignatureProgramError) -> Self {
-        ProgramError::Custom(e as u32)
-    }
-}
+        let variant = format!("{:?}", e);
+        let message = e.to_string();
+        let location = std::panic::Location::caller().to_string();
 
-#[track_caller]
-#[inline(always)]
-pub fn assert_with_msg(v: bool, err: impl Into<ProgramError>, msg: &str) -> ProgramResult {
-    if v {
-        Ok(())
-    } else {
-        let caller = std::panic::Location::caller();
-        let caller_string = caller.to_string();
-        log!("{}. \n{}", msg, caller_string.as_str());
-        Err(err.into())
+        let full_message = format!("{} - {} @ {}", variant, message, location);
+        log!("{}", full_message.as_str());
+
+        ProgramError::Custom(e as u32)
     }
 }

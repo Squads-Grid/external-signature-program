@@ -1,17 +1,16 @@
-
-use solana_keypair::Keypair;
-use solana_signer::{EncodableKey, Signer};
 use crate::p256::utils::svm::get_valid_slothash;
 use crate::p256::utils::{
-    svm::{create_and_send_svm_transaction, initialize_svm},
     initialization::initialize_passkey_account,
+    svm::{create_and_send_svm_transaction, initialize_svm},
 };
-
-
-
+use solana_keypair::Keypair;
+use solana_signer::{EncodableKey, Signer};
 
 fn test_creation_from_fixture(path: &str) {
-    let payer = Keypair::read_from_file("tests/p256/keypairs/sinf1bu1CMQaMzeDoysAU7dAp2gs5j2V3vM9W5ZXAyB.json").unwrap();
+    let payer = Keypair::read_from_file(
+        "tests/p256/keypairs/sinf1bu1CMQaMzeDoysAU7dAp2gs5j2V3vM9W5ZXAyB.json",
+    )
+    .unwrap();
     let (mut svm, program_id) = initialize_svm(vec![payer.pubkey()]);
 
     let (_hash, truncated_slot) = get_valid_slothash(&svm);
@@ -21,10 +20,7 @@ fn test_creation_from_fixture(path: &str) {
 
     // Create and submit the transaction
     create_and_send_svm_transaction(&mut svm, instructions, &payer.pubkey(), vec![&payer]).unwrap();
-
-
 }
-
 
 #[cfg(test)]
 mod test_initialization {
