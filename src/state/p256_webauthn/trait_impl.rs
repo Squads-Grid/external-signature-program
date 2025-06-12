@@ -104,7 +104,7 @@ impl ExternallySignedAccountData for P256WebauthnAccountData {
         // Since the counter needs to be updated, we always need to check that
         // the account is writable
         if !account_info.is_writable() {
-            return Err(ExternalSignatureProgramError::AccountNotWritable.into());
+            return Err(ExternalSignatureProgramError::P256AccountNotWritable.into());
         }
         let derive_args = Self::DeriveAccountArgs {
             public_key: self.public_key.to_bytes(),
@@ -145,7 +145,7 @@ impl ExternallySignedAccountData for P256WebauthnAccountData {
         // Check the payloads pubkey matches the account data
         let payload_pubkey = signature_payload.public_key;
         if payload_pubkey != self.public_key.to_bytes() {
-            return Err(ExternalSignatureProgramError::PublicKeyMismatch.into());
+            return Err(ExternalSignatureProgramError::P256PublicKeyMismatch.into());
         }
 
         // Split the signature payload into auth data and client data hash
@@ -157,7 +157,7 @@ impl ExternallySignedAccountData for P256WebauthnAccountData {
 
         // Check that the user is present
         if !auth_data_parser.is_user_present() {
-            return Err(ExternalSignatureProgramError::UserNotPresent.into());
+            return Err(ExternalSignatureProgramError::P256UserNotPresent.into());
         }
 
         // Check that the user is verified (Not sure whether we want to enforce
@@ -170,7 +170,7 @@ impl ExternallySignedAccountData for P256WebauthnAccountData {
         let rp_id_hash = auth_data_parser.rp_id_hash();
         let rp_id: &[u8] = &self.rp_id_info.rp_id[..(self.rp_id_info.rp_id_len as usize)];
         if self.rp_id_info.rp_id_hash.ne(&rp_id_hash) {
-            return Err(ExternalSignatureProgramError::RelyingPartyMismatch.into());
+            return Err(ExternalSignatureProgramError::P256RelyingPartyMismatch.into());
         }
 
         // Reconstruct the client data JSON
@@ -183,7 +183,7 @@ impl ExternallySignedAccountData for P256WebauthnAccountData {
 
         // Compare the reconstructed client data hash with the client data hash
         if reconstructed_client_data_hash != client_data_hash {
-            return Err(ExternalSignatureProgramError::ClientDataHashMismatch.into());
+            return Err(ExternalSignatureProgramError::P256ClientDataHashMismatch.into());
         }
 
         // Get the counter from the auth data

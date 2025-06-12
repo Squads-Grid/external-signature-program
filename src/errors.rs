@@ -66,21 +66,21 @@ pub enum ExternalSignatureProgramError {
 
     /// P256 WebAuthn Related Errors
     #[error("Relying party mismatch")]
-    RelyingPartyMismatch,
+    P256RelyingPartyMismatch,
     #[error("Client data hash mismatch")]
-    ClientDataHashMismatch,
+    P256ClientDataHashMismatch,
     #[error("Account is not writable")]
-    AccountNotWritable,
+    P256AccountNotWritable,
     #[error("Invalid passkey Algorithm")]
-    InvalidAlgorithm,
+    P256InvalidAlgorithm,
     #[error("Invalid public key encoding")]
-    InvalidPublicKeyEncoding,
+    P256InvalidPublicKeyEncoding,
     #[error("Public key mismatch")]
-    PublicKeyMismatch,
+    P256PublicKeyMismatch,
     #[error("User not verified")]
-    UserNotVerified,
+    P256UserNotVerified,
     #[error("User not present")]
-    UserNotPresent,
+    P256UserNotPresent,
 }
 
 impl From<ExternalSignatureProgramError> for ProgramError {

@@ -54,7 +54,7 @@ impl<'a> AuthDataParser<'a> {
 
         // We expect CBOR to start with a map (0xa#) where # is the number of items
         if cbor_start >= self.auth_data.len() || (self.auth_data[cbor_start] & 0xF0) != 0xA0 {
-            return Err(ExternalSignatureProgramError::InvalidPublicKeyEncoding);
+            return Err(ExternalSignatureProgramError::P256InvalidPublicKeyEncoding);
         }
 
         // Check for algorithm (-7)
@@ -68,7 +68,7 @@ impl<'a> AuthDataParser<'a> {
         }
 
         if !alg_found {
-            return Err(ExternalSignatureProgramError::InvalidAlgorithm);
+            return Err(ExternalSignatureProgramError::P256InvalidAlgorithm);
         }
 
         // Find the x-coordinate by looking for key -2 (0x21) followed by byte string marker (0x58 0x20)
@@ -101,7 +101,7 @@ impl<'a> AuthDataParser<'a> {
             || x_start + 32 > self.auth_data.len()
             || y_start + 32 > self.auth_data.len()
         {
-            return Err(ExternalSignatureProgramError::InvalidPublicKeyEncoding);
+            return Err(ExternalSignatureProgramError::P256InvalidPublicKeyEncoding);
         }
 
         // Extract x coordinate
