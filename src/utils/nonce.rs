@@ -26,9 +26,10 @@ impl TruncatedSlot {
     /// Returns the difference between two truncated slots
     pub fn get_index_difference(&self, other: &Self) -> Result<u16, ProgramError> {
         // Truncated slot should never be greater than a current slot
-        self.0
-            .checked_sub(other.0)
-            .ok_or(ExternalSignatureProgramError::InvalidTruncatedSlot.into())
+        match self.0.checked_sub(other.0) {
+            Some(diff) => Ok(diff),
+            None => Err(ExternalSignatureProgramError::InvalidTruncatedSlot.into())
+        }
     }
 }
 
