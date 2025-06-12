@@ -47,6 +47,8 @@ hex = "0.4.3"
 bincode = "1.3.3"
 solana-slot-hashes = "2.2.1"
 solana-hash = "2.2.1"
+solana-rpc-client = "2.2.1"
+tokio = "1.45.1"
 
 [lints.rust]
 unexpected_cfgs = { level = "allow", check-cfg = ['cfg(exe)'] }

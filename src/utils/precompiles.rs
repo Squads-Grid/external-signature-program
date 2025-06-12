@@ -82,6 +82,7 @@ impl Into<SignatureOffsets> for LegacySecp256k1SignatureOffsets {
     }
 }
 
+/// Struct for easy access to a signature payload
 pub struct SignaturePayload<'a> {
     pub signature: &'a [u8],
     pub public_key: &'a [u8],
@@ -95,8 +96,7 @@ pub struct PrecompileParser<'a, T: PrecompileInfo> {
     _marker: std::marker::PhantomData<T>,
 }
 
-pub fn get_data_slice<'a>(data: &'a [u8], offset: usize, size: usize) -> &'a [u8] 
-{
+pub fn get_data_slice<'a>(data: &'a [u8], offset: usize, size: usize) -> &'a [u8] {
     &data[offset as usize..offset as usize + size as usize]
 }
 
@@ -116,6 +116,7 @@ impl<'a, 'b, T: PrecompileInfo> PrecompileParser<'a, T> {
         precompile_ix: &'a IntrospectedInstruction<'a>,
         instructions_sysvar: &'a Instructions<Ref<'a, [u8]>>,
     ) -> Result<Self, ProgramError> {
+        // Check that the precompile id matches
         if precompile_ix.get_program_id() != &T::get_precompile_id() {
             return Err(ProgramError::Custom(
                 ExternalSignatureProgramError::InvalidPrecompileId as u32,
@@ -127,20 +128,30 @@ impl<'a, 'b, T: PrecompileInfo> PrecompileParser<'a, T> {
             _marker: std::marker::PhantomData,
         })
     }
+
+    /// Returns the number of signatures
     pub fn num_signatures(&self) -> usize {
         self.precompile_ix_data[0] as usize
     }
-    pub fn get_signature_payload_at(&self, index: usize) -> Result<SignaturePayload, ProgramError> {
+
+    /// Returns the n'th signature payload within the precompile instruction
+    pub fn get_signature_payload(&self, index: usize) -> Result<SignaturePayload, ProgramError> {
+        // Check that the index is within bounds
         if index >= self.num_signatures() {
             return Err(ProgramError::Custom(
                 ExternalSignatureProgramError::InvalidSignatureIndex as u32,
             ));
         }
+
+        // Get the data start offset and signature offsets size
         let data_start_offset = T::get_data_start_offset();
         let signature_offsets_size = T::get_signature_offsets_size();
 
+        // Get the offset start and payload
         let offset_start = data_start_offset + signature_offsets_size * index;
         let payload: SignaturePayload = match T::get_precompile_id() {
+            // TODO: Implement legacy secp256k1 precompile since it uses
+            // different offsets from the other precompiles
             LEGACY_SECP256K1_PRECOMPILE_ID => {
                 panic!("Not implemented");
             }
@@ -151,34 +162,65 @@ impl<'a, 'b, T: PrecompileInfo> PrecompileParser<'a, T> {
                 )
                 .map_err(|_| ExternalSignatureProgramError::InvalidSignatureOffset)?;
 
+                // Get the signature
                 let signature = match offset.signature_instruction_index {
-                    u16::MAX => {
-                        get_data_slice(self.precompile_ix_data, offset.signature_offset as usize, T::get_signature_size())
-                    }
+                    u16::MAX => get_data_slice(
+                        self.precompile_ix_data,
+                        offset.signature_offset as usize,
+                        T::get_signature_size(),
+                    ),
                     _ => {
-                        let instruction = self.instructions_sysvar.load_instruction_at(offset.signature_instruction_index as usize).map_err(|_| ExternalSignatureProgramError::InvalidSignatureOffset)?;
+                        let instruction = self
+                            .instructions_sysvar
+                            .load_instruction_at(offset.signature_instruction_index as usize)
+                            .map_err(|_| ExternalSignatureProgramError::InvalidSignatureOffset)?;
                         let ix_data = instruction.get_instruction_data();
-                        get_data_slice_raw(ix_data, offset.signature_offset as usize, T::get_signature_size())
+                        get_data_slice_raw(
+                            ix_data,
+                            offset.signature_offset as usize,
+                            T::get_signature_size(),
+                        )
                     }
                 };
+                // Get the public key
                 let public_key = match offset.public_key_instruction_index {
-                    u16::MAX => {
-                        get_data_slice(self.precompile_ix_data, offset.public_key_offset as usize, T::get_public_key_size())
-                    }
+                    u16::MAX => get_data_slice(
+                        self.precompile_ix_data,
+                        offset.public_key_offset as usize,
+                        T::get_public_key_size(),
+                    ),
                     _ => {
-                        let instruction = self.instructions_sysvar.load_instruction_at(offset.public_key_instruction_index as usize).map_err(|_| ExternalSignatureProgramError::InvalidSignatureOffset)?;
+                        let instruction = self
+                            .instructions_sysvar
+                            .load_instruction_at(offset.public_key_instruction_index as usize)
+                            .map_err(|_| ExternalSignatureProgramError::InvalidSignatureOffset)?;
                         let ix_data = instruction.get_instruction_data();
-                        get_data_slice_raw(ix_data, offset.public_key_offset as usize, T::get_public_key_size())
+                        get_data_slice_raw(
+                            ix_data,
+                            offset.public_key_offset as usize,
+                            T::get_public_key_size(),
+                        )
                     }
                 };
+
+                // Get the message
                 let message = match offset.message_instruction_index {
-                    u16::MAX => {
-                        get_data_slice(self.precompile_ix_data, offset.message_data_offset as usize, offset.message_data_size as usize)
-                    }
+                    u16::MAX => get_data_slice(
+                        self.precompile_ix_data,
+                        offset.message_data_offset as usize,
+                        offset.message_data_size as usize,
+                    ),
                     _ => {
-                        let instruction = self.instructions_sysvar.load_instruction_at(offset.message_instruction_index as usize).map_err(|_| ExternalSignatureProgramError::InvalidSignatureOffset)?;
+                        let instruction = self
+                            .instructions_sysvar
+                            .load_instruction_at(offset.message_instruction_index as usize)
+                            .map_err(|_| ExternalSignatureProgramError::InvalidSignatureOffset)?;
                         let ix_data = instruction.get_instruction_data();
-                        get_data_slice_raw(ix_data, offset.message_data_offset as usize, offset.message_data_size as usize)
+                        get_data_slice_raw(
+                            ix_data,
+                            offset.message_data_offset as usize,
+                            offset.message_data_size as usize,
+                        )
                     }
                 };
                 SignaturePayload {

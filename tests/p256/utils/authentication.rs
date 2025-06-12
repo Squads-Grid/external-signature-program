@@ -3,8 +3,8 @@ use std::fs;
 use borsh::{to_vec, BorshSerialize};
 use external_signature_program::{
     instructions::execute_instructions::ExecutableInstructionArgs,
-    signatures::{AuthType, ClientDataJsonReconstructionParams},
     state::P256RawVerificationData,
+    utils::signatures::{AuthType, ClientDataJsonReconstructionParams},
     utils::{nonce::TruncatedSlot, SmallVec, SLOT_HASHES_ID},
 };
 use litesvm::LiteSVM;
@@ -35,13 +35,9 @@ pub fn authenticate_passkey_account(
     let client_data_hash = solana_nostd_sha256::hashv(&[&webauthn_data.client_data_json]);
     let mut message_data = webauthn_data.auth_data.clone();
     message_data.extend_from_slice(&client_data_hash);
-    let instruction = new_secp256r1_instruction(
-        &webauthn_data.signature,
-        &message_data,
-        &public_key,
-        None
-    )
-    .unwrap();
+    let instruction =
+        new_secp256r1_instruction(&webauthn_data.signature, &message_data, &public_key, None)
+            .unwrap();
 
     let client_data_json_reconstruction_params =
         ClientDataJsonReconstructionParams::new(AuthType::Get, false, false, false, None);

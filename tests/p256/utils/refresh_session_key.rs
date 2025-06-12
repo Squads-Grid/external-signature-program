@@ -3,8 +3,8 @@ use std::fs;
 use borsh::{to_vec, BorshSerialize};
 use external_signature_program::{
     instructions::refresh_session_key::RefreshSessionKeyArgs,
-    signatures::{AuthType, ClientDataJsonReconstructionParams},
     state::{P256RawVerificationData, SessionKey},
+    utils::signatures::{AuthType, ClientDataJsonReconstructionParams},
     utils::{SmallVec, TruncatedSlot, SLOT_HASHES_ID},
 };
 use litesvm::LiteSVM;
@@ -13,8 +13,7 @@ use solana_program::instruction::{AccountMeta, Instruction};
 use solana_pubkey::Pubkey;
 
 use crate::p256::utils::{
-    instruction_and_payload_generation::get_execution_account,
-    parser::parse_webauthn_fixture,
+    instruction_and_payload_generation::get_execution_account, parser::parse_webauthn_fixture,
     secp256r1_instruction::new_secp256r1_instruction,
 };
 
@@ -37,13 +36,9 @@ pub fn refresh_session_key(
     let client_data_hash = solana_nostd_sha256::hashv(&[&webauthn_data.client_data_json]);
     let mut message_data = webauthn_data.auth_data.clone();
     message_data.extend_from_slice(&client_data_hash);
-    let instruction = new_secp256r1_instruction(
-        &webauthn_data.signature,
-        &message_data,
-        &public_key,
-        None,
-    )
-    .unwrap();
+    let instruction =
+        new_secp256r1_instruction(&webauthn_data.signature, &message_data, &public_key, None)
+            .unwrap();
 
     let client_data_json_reconstruction_params =
         ClientDataJsonReconstructionParams::new(AuthType::Get, false, false, false, None);

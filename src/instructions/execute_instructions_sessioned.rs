@@ -10,23 +10,14 @@ use pinocchio::{
 
 use crate::{
     errors::ExternalSignatureProgramError,
-    instructions::CompiledInstruction,
     state::{
         ExecutionAccount, ExternallySignedAccount, ExternallySignedAccountData,
         P256WebauthnAccountData, SignatureScheme, SignerExecutionScheme,
     },
-    utils::SmallVec,
+    utils::{create_instruction_execution_account_metas, CompiledInstruction, SmallVec},
 };
 
-pub struct ExecuteInstructionsSessionedContext<'a, T: ExternallySignedAccountData> {
-    pub external_account: Box<ExternallySignedAccount<'a, T>>,
-    pub execution_account: ExecutionAccount,
-    pub session_signer: &'a AccountInfo,
-    pub instructions: Box<&'a [CompiledInstruction]>,
-    pub instruction_execution_accounts: Box<&'a [AccountInfo]>,
-    pub instruction_execution_account_metas: Box<Vec<AccountMeta<'a>>>,
-}
-
+// Raw arguments for execution instruction data
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct ExecutableInstructionSessionedArgs {
     pub signature_scheme: u8,
@@ -34,16 +25,34 @@ pub struct ExecutableInstructionSessionedArgs {
     pub instructions: SmallVec<u8, CompiledInstruction>,
 }
 
+// Sanitized and checked accounts for execution
+pub struct ExecuteInstructionsSessionedAccounts<'a, T: ExternallySignedAccountData> {
+    // [MUT]
+    pub externally_signed_account: ExternallySignedAccount<'a, T>,
+    // [SIGNER]
+    pub session_signer: &'a AccountInfo,
+    pub instruction_execution_accounts: &'a [AccountInfo],
+}
+
+// Sanitized and checked context for execution
+pub struct ExecuteInstructionsSessionedContext<'a, T: ExternallySignedAccountData> {
+    pub accounts: ExecuteInstructionsSessionedAccounts<'a, T>,
+    pub execution_account: ExecutionAccount,
+    pub instructions: &'a [CompiledInstruction],
+    pub instruction_execution_account_metas: Vec<AccountMeta<'a>>,
+}
+
 impl<'a, T: ExternallySignedAccountData> ExecuteInstructionsSessionedContext<'a, T> {
+    // Sanitizes, checks and loads the context from the account infos and args
     pub fn load(
         account_infos: &'a [AccountInfo],
         execution_args: &'a ExecutableInstructionSessionedArgs,
     ) -> Result<Box<Self>, ProgramError> {
-        let (external_account, session_signer, instruction_execution_accounts) = if let [external_account, session_signer, instruction_execution_accounts @ ..] =
+        let (externally_signed_account, session_signer, instruction_execution_accounts) = if let [externally_signed_account, session_signer, instruction_execution_accounts @ ..] =
             account_infos
         {
             (
-                external_account,
+                externally_signed_account,
                 session_signer,
                 instruction_execution_accounts,
             )
@@ -51,69 +60,56 @@ impl<'a, T: ExternallySignedAccountData> ExecuteInstructionsSessionedContext<'a,
             return Err(ProgramError::NotEnoughAccountKeys);
         };
 
+        // Load and check the relevant accounts
+        let externally_signed_account =
+            ExternallySignedAccount::<T>::load(externally_signed_account)?;
+        externally_signed_account.is_valid_session_key(session_signer)?;
+
+        // Get the executing account based on the signer execution scheme
         let signer_execution_scheme =
             SignerExecutionScheme::try_from_primitive(execution_args.signer_execution_scheme)
                 .map_err(|_| ExternalSignatureProgramError::InvalidSignerExecutionScheme)?;
+        let executing_account =
+            externally_signed_account.get_execution_account(signer_execution_scheme)?;
 
-        let external_account = ExternallySignedAccount::<T>::new(external_account)?;
-        let executing_account = external_account.get_execution_account(signer_execution_scheme)?;
-
-        if !session_signer.is_signer() {
-            return Err(ExternalSignatureProgramError::SessionSignerNotASigner.into());
-        }
-
-        let instruction_execution_account_metas = instruction_execution_accounts
-            .iter()
-            .map(|account| match account.key() == &executing_account.key {
-                // The execution account needs to be set to be a signer for the
-                // later instruction execution
-                true => match signer_execution_scheme {
-                    SignerExecutionScheme::ExternalAccount => {
-                        // If we're directly signing with the external
-                        // account, we want to do so with marked as non-mutable
-                        AccountMeta::new(account.key(), false, true)
-                    }
-                    SignerExecutionScheme::ExecutionAccount => {
-                        AccountMeta::new(account.key(), account.is_writable(), true)
-                    }
-                },
-                _ => {
-                    // All other accounts, use as they are passed in
-                    AccountMeta::new(account.key(), account.is_writable(), account.is_signer())
-                }
-            })
-            .collect();
+        // Build the instruction execution account metas
+        let instruction_execution_account_metas = create_instruction_execution_account_metas(
+            instruction_execution_accounts,
+            &executing_account,
+            signer_execution_scheme,
+        );
 
         Ok(Box::new(Self {
-            external_account: Box::new(external_account),
+            accounts: ExecuteInstructionsSessionedAccounts {
+                externally_signed_account,
+                session_signer,
+                instruction_execution_accounts,
+            },
             execution_account: executing_account,
-            session_signer,
-            instruction_execution_accounts: Box::new(instruction_execution_accounts),
-            instruction_execution_account_metas: Box::new(instruction_execution_account_metas),
-            instructions: Box::new(execution_args.instructions.as_slice()),
+            instructions: execution_args.instructions.as_slice(),
+            instruction_execution_account_metas,
         }))
     }
 }
 
+/// Processes the execute instructions sessioned instruction
 pub fn process_execute_instructions_sessioned(
     accounts: &[AccountInfo],
     data: &[u8],
 ) -> ProgramResult {
+    // Parse the execution args
     let args = ExecutableInstructionSessionedArgs::try_from_slice(data)
         .map_err(|_| ExternalSignatureProgramError::InvalidExecutionArgs)?;
+    // Parse the signature scheme
     let signature_scheme = SignatureScheme::try_from_primitive(args.signature_scheme)
         .map_err(|_| ExternalSignatureProgramError::InvalidSignatureScheme)?;
 
+    // Load the execution context based on the signature scheme
     let execution_context = match signature_scheme {
         SignatureScheme::P256Webauthn => {
             ExecuteInstructionsSessionedContext::<P256WebauthnAccountData>::load(accounts, &args)?
         }
     };
-
-    // Check that the session is valid
-    execution_context
-        .external_account
-        .is_valid_session_key(execution_context.session_signer.key())?;
 
     // Initialize containers for both data structures
     let mut account_metas = Vec::with_capacity(256);
@@ -137,11 +133,13 @@ pub fn process_execute_instructions_sessioned(
         // Now create the filtered account infos using the unique indices
         let filtered_account_infos: Vec<&AccountInfo> = account_info_indices
             .iter()
-            .map(|&index| &execution_context.instruction_execution_accounts[index as usize])
+            .map(|&index| {
+                &execution_context.accounts.instruction_execution_accounts[index as usize]
+            })
             .collect();
 
         let instruction_to_invoke = Instruction {
-            program_id: execution_context.instruction_execution_accounts
+            program_id: execution_context.accounts.instruction_execution_accounts
                 [instruction.program_id_index as usize]
                 .key(),
             data: &instruction.data.as_slice(),

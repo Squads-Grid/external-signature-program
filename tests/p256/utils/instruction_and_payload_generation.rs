@@ -3,8 +3,8 @@ use std::{fs, str::FromStr};
 use base64::{engine::general_purpose, Engine as _};
 use borsh::BorshSerialize;
 use external_signature_program::{
-    instructions::execute_instructions::CompiledInstruction as ExternalCompiledInstruction,
-    utils::SmallVec, ID as PROGRAM_ID,
+    utils::instructions::CompiledInstruction as ExternalCompiledInstruction, utils::SmallVec,
+    ID as PROGRAM_ID,
 };
 use sha2::{Digest, Sha256};
 use solana_keypair::Keypair;
