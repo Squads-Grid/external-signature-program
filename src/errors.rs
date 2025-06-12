@@ -1,3 +1,5 @@
+use std::{any::type_name, panic::Location};
+
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 use pinocchio::{program_error::ProgramError, ProgramResult};
 use pinocchio_log::log;
@@ -84,20 +86,15 @@ pub enum ExternalSignatureProgramError {
 }
 
 impl From<ExternalSignatureProgramError> for ProgramError {
+    #[track_caller]
     fn from(e: ExternalSignatureProgramError) -> Self {
-        ProgramError::Custom(e as u32)
-    }
-}
+        let variant = format!("{:?}", e);
+        let message = e.to_string();
+        let location = std::panic::Location::caller().to_string();
 
-#[track_caller]
-#[inline(always)]
-pub fn assert_with_msg(v: bool, err: impl Into<ProgramError>, msg: &str) -> ProgramResult {
-    if v {
-        Ok(())
-    } else {
-        let caller = std::panic::Location::caller();
-        let caller_string = caller.to_string();
-        log!("{}. \n{}", msg, caller_string.as_str());
-        Err(err.into())
+        let full_message = format!("{} - {} @ {}", variant, message, location);
+        log!("{}", full_message.as_str());
+
+        ProgramError::Custom(e as u32)
     }
 }
