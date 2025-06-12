@@ -1,11 +1,10 @@
 use pinocchio_pubkey::declare_id;
 
-mod entrypoint;
 mod allocator;
-pub mod state;
-pub mod instructions;
-pub mod signatures;
-pub mod utils;
+mod entrypoint;
 pub mod errors;
+pub mod instructions;
+pub mod state;
+pub mod utils;
 
 declare_id!("ExtSgUPtP3JyKUysFw2S5fpL5fWfUPzGUQLd2bTwftXN");

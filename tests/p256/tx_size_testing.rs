@@ -60,8 +60,7 @@ async fn test_transaction() {
     let instruction = system_instruction::transfer(&smart_account, &recipient, 100000000);
     let blockhash = rpc_client.get_latest_blockhash().await.unwrap();
     let message =
-        solana_message::v0::Message::try_compile(&payer, &[instruction], &[], blockhash)
-            .unwrap();
+        solana_message::v0::Message::try_compile(&payer, &[instruction], &[], blockhash).unwrap();
     let tx = VersionedTransaction {
         signatures: vec![Signature::default(), Signature::default()],
         message: solana_message::VersionedMessage::V0(message),

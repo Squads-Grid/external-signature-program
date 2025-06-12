@@ -10,6 +10,7 @@ pub struct ClientDataJsonReconstructionParams {
     pub port: Option<u16>,
 }
 
+/// Implementation for reconstructing clientDataJson
 impl ClientDataJsonReconstructionParams {
     // Constants for type (high 4 bits)
     const TYPE_CREATE: u8 = 0x00;
@@ -18,8 +19,9 @@ impl ClientDataJsonReconstructionParams {
     // Constants for flags (low 4 bits)
     const FLAG_CROSS_ORIGIN: u8 = 0x01;
     const FLAG_HTTP_ORIGIN: u8 = 0x02; // If not set, assume https://
-    const FLAG_GOOGLE_EXTRA: u8 = 0x04;
+    const FLAG_GOOGLE_EXTRA: u8 = 0x04; // Extra field that chrome uses to make sure the clientDataJson is not compared to a template
 
+    /// Used to create the params (mostly for client side)
     pub fn new(
         auth_type: AuthType,
         cross_origin: bool,
@@ -48,6 +50,7 @@ impl ClientDataJsonReconstructionParams {
         }
     }
 
+    /// Gets the auth type from the params
     pub fn auth_type(&self) -> AuthType {
         if (self.type_and_flags & 0xF0) == Self::TYPE_GET {
             AuthType::Get
@@ -56,71 +59,62 @@ impl ClientDataJsonReconstructionParams {
         }
     }
 
+    /// Checks if the origin is cross origin
     pub fn is_cross_origin(&self) -> bool {
         self.type_and_flags & Self::FLAG_CROSS_ORIGIN != 0
     }
 
+    /// Checks if the origin is http
     pub fn is_http(&self) -> bool {
         self.type_and_flags & Self::FLAG_HTTP_ORIGIN != 0
     }
 
+    /// Checks if the google extra field is set
     pub fn has_google_extra(&self) -> bool {
         self.type_and_flags & Self::FLAG_GOOGLE_EXTRA != 0
     }
 }
 
+/// Enum for the auth type
 #[derive(Clone, Copy, Debug)]
 pub enum AuthType {
     Create,
     Get,
 }
 
+/// Reconstructs the clientDataJson from the params, rp_id and challenge
 pub fn reconstruct_client_data_json(
     params: &ClientDataJsonReconstructionParams,
     rp_id: &[u8],
     challenge: &[u8],
 ) -> Vec<u8> {
+    // Encode the challenge
     let challenge_b64url = general_purpose::URL_SAFE_NO_PAD.encode(challenge);
 
+    // Get the type string
     let type_str = match params.auth_type() {
         AuthType::Create => "webauthn.create",
         AuthType::Get => "webauthn.get",
     };
 
+    // Get origin prefixes and port if present
     let prefix = if params.is_http() {
         "http://"
     } else {
         "https://"
     };
+    // Create the origin based on the rp_id
     let origin = if let Some(port) = params.port {
         format!("{}{}:{}", prefix, std::str::from_utf8(rp_id).unwrap(), port)
     } else {
         format!("{}{}", prefix, std::str::from_utf8(rp_id).unwrap())
     };
+    // Create the cross origin string
     let cross_origin = if params.is_cross_origin() {
         "true"
     } else {
         "false"
     };
-
-    // Manual JSON construction without serde_json
-    // let mut json = String::with_capacity(256); // Pre-allocate a reasonable buffer size
-
-    // json.push_str("{\"type\":\"");
-    // json.push_str(type_str);
-    // json.push_str("\",\"challenge\":\"");
-    // json.push_str(&challenge_b64url);
-    // json.push_str("\",\"origin\":\"");
-    // json.push_str(&origin);
-    // json.push_str("\",\"crossOrigin\":");
-    // json.push_str(cross_origin);
-
-    // // Add Google's extra field if needed
-    // if params.has_google_extra() {
-    //     json.push_str(",\"other_keys_can_be_added_here\":\"do not compare clientDataJSON against a template. See https://goo.gl/yabPex\"");
-    // }
-
-    // json.push_str("}");
 
     let mut json_bytes: Vec<u8> = Vec::with_capacity(256);
     json_bytes.extend_from_slice(b"{\"type\":\"");
@@ -208,7 +202,7 @@ mod tests {
         let params = ClientDataJsonReconstructionParams::new(
             AuthType::Get, // Based on the provided type in the base64 string
             false,         // cross_origin
-            true,         // is_http
+            true,          // is_http
             false,         // has_google_extra
             Some(3000),    // port
         );
@@ -225,10 +219,6 @@ mod tests {
         let expected_bytes = general_purpose::URL_SAFE_NO_PAD
             .decode(expected_base64)
             .unwrap();
-
-        // println!("result: {:?}", String::from_utf8(result.clone()).unwrap());
-        // let result_encoded = general_purpose::URL_SAFE_NO_PAD.encode(result.as_slice());
-        // println!("result: {:?}", result_encoded);
 
         // Assert that the result matches the expected bytes
         assert_eq!(result, expected_bytes);

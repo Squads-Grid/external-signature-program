@@ -75,6 +75,12 @@ pub enum ExternalSignatureProgramError {
     InvalidAlgorithm,
     #[error("Invalid public key encoding")]
     InvalidPublicKeyEncoding,
+    #[error("Public key mismatch")]
+    PublicKeyMismatch,
+    #[error("User not verified")]
+    UserNotVerified,
+    #[error("User not present")]
+    UserNotPresent,
 }
 
 impl From<ExternalSignatureProgramError> for ProgramError {

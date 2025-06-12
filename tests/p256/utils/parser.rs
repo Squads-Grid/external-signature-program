@@ -1,5 +1,5 @@
 use base64::{engine::general_purpose, Engine as _};
-use external_signature_program::signatures::{AuthType, ClientDataJsonReconstructionParams};
+use external_signature_program::utils::signatures::{AuthType, ClientDataJsonReconstructionParams};
 use serde_cbor::Value as CborValue;
 use serde_json::Value as JsonValue;
 

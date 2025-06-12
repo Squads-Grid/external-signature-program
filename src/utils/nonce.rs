@@ -11,14 +11,19 @@ use crate::{
 };
 
 #[derive(BorshDeserialize, BorshSerialize, Clone)]
+// Wrapper around a u16. Since we only need 150 slots of expiration we can just
+// look at the last 4 digits of the slot height to get the correct slothash.
+// This saves us the 30 extra bytes of having to submit a whole hash
 pub struct TruncatedSlot(pub u16);
 
 impl TruncatedSlot {
+    /// Creates a new truncated slot from an slot
     pub fn new(untruncated_slot: u64) -> Result<Self, ProgramError> {
         let slot = untruncated_slot % 1000;
         Ok(Self(slot as u16))
     }
 
+    /// Returns the difference between two truncated slots
     pub fn get_index_difference(&self, other: &Self) -> Result<u16, ProgramError> {
         // Truncated slot should never be greater than a current slot
         self.0
@@ -32,12 +37,14 @@ pub struct NonceData<'a> {
     pub slothash: [u8; 32],
 }
 
+/// Validates a nonce signature
 pub fn validate_nonce<'a>(
     slothashes_sysvar: SlotHashes<Ref<'a, [u8]>>,
     slot: &TruncatedSlot,
     nonce_signer: &'a AccountInfo,
 ) -> Result<NonceData<'a>, ProgramError> {
-    // Ensure the program isn't being called via CPI
+    // Ensure the program isn't being called via CPI, since we need the signers
+    // signature to be present in the runtimes signature cache to prevent replay
     let current_stack_height = get_stack_height();
     if current_stack_height > 1 {
         return Err(ExternalSignatureProgramError::CPINotAllowed.into());
@@ -48,11 +55,12 @@ pub fn validate_nonce<'a>(
         return Err(ExternalSignatureProgramError::MissingNonceSignature.into());
     }
 
-    // Check that the slothash is not too old
+    // Get current slothash and index difference to submitted slot
     let most_recent_slot_hash = slothashes_sysvar.get_slot_hash(0)?;
     let truncated_most_recent_slot = TruncatedSlot::new(most_recent_slot_hash.height)?;
     let index_difference = truncated_most_recent_slot.get_index_difference(&slot)?;
 
+    // Check that the slothash is not too old
     if index_difference >= 150 {
         return Err(ExternalSignatureProgramError::ExpiredSlothash.into());
     }

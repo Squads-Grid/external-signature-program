@@ -515,6 +515,5 @@ mod tests {
             found_original_key,
             "Original signing key was not found among the recovered keys"
         );
-
     }
 }

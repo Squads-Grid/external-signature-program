@@ -1,159 +1,26 @@
-use borsh::{BorshDeserialize, BorshSerialize};
-use bytemuck::{Pod, Zeroable};
 use pinocchio::{
     account_info::{AccountInfo, Ref},
     program_error::ProgramError,
-    pubkey::{try_find_program_address, Pubkey},
+    pubkey::try_find_program_address,
     sysvars::{clock::Clock, instructions::Instructions, Sysvar},
 };
 
 use crate::{
     errors::ExternalSignatureProgramError,
-    signatures::{
-        reconstruct_client_data_json, AuthDataParser, ClientDataJsonReconstructionParams,
-    },
     state::{
-        AccountHeader, AccountSeeds, ExternallySignedAccountData, SessionKey,
-        SignatureScheme, SESSION_KEY_EXPIRATION_LIMIT,
+        ExternallySignedAccountData, SessionKey, SignatureScheme, SESSION_KEY_EXPIRATION_LIMIT,
     },
-    utils::{hash, PrecompileParser, Secp256r1Precompile, SmallVec, HASH_LENGTH},
+    utils::{
+        hash,
+        signatures::{reconstruct_client_data_json, AuthDataParser},
+        PrecompileParser, Secp256r1Precompile,
+    },
 };
 
-
-#[derive(BorshDeserialize, BorshSerialize, Clone)]
-pub struct P256RawInitializationData {
-    pub rp_id: SmallVec<u8, u8>,
-    pub public_key: [u8; 33],
-    pub client_data_json_reconstruction_params: ClientDataJsonReconstructionParams,
-}
-
-#[derive(BorshDeserialize, BorshSerialize, Clone, Copy)]
-#[repr(C)]
-pub struct P256ParsedInitializationData {
-    pub rp_id_info: RpIdInformation,
-    pub public_key: CompressedP256PublicKey,
-    pub counter: u64,
-    pub client_data_json_reconstruction_params: ClientDataJsonReconstructionParams,
-}
-
-impl From<P256RawInitializationData> for P256ParsedInitializationData {
-    fn from(data: P256RawInitializationData) -> Self {
-        let rp_id_hash = hash(&data.rp_id.as_slice());
-        Self {
-            rp_id_info: RpIdInformation::new(data.rp_id.as_slice(), rp_id_hash),
-            public_key: CompressedP256PublicKey::new(&data.public_key),
-            counter: 0,
-            client_data_json_reconstruction_params: data.client_data_json_reconstruction_params,
-        }
-    }
-}
-
-#[derive(BorshDeserialize, BorshSerialize, Clone)]
-pub struct P256RawVerificationData {
-    pub public_key: [u8; 33],
-    pub client_data_json_reconstruction_params: ClientDataJsonReconstructionParams,
-}
-
-#[derive(BorshDeserialize, BorshSerialize, Clone)]
-pub struct P256ParsedVerificationData {
-    pub public_key: CompressedP256PublicKey,
-    pub client_data_json_reconstruction_params: ClientDataJsonReconstructionParams,
-}
-
-impl From<P256RawVerificationData> for P256ParsedVerificationData {
-    fn from(data: P256RawVerificationData) -> Self {
-        Self {
-            public_key: CompressedP256PublicKey::new(&data.public_key),
-            client_data_json_reconstruction_params: data.client_data_json_reconstruction_params,
-        }
-    }
-}
-
-/// P-256 (secp256r1) account data
-#[derive(Pod, Zeroable, Copy, Clone)]
-#[repr(C)]
-pub struct P256WebauthnAccountData {
-    /// Exists here purely for alignment
-    _header: AccountHeader,
-
-    /// RP ID information
-    pub rp_id_info: RpIdInformation,
-
-    /// P-256 public key
-    pub public_key: CompressedP256PublicKey,
-
-    /// Padding to ensure alignment
-    pub padding: [u8; 2],
-
-    /// Session key
-    pub session_key: SessionKey,
-
-    // Webauthn signature counter (used mostly by security keys)
-    pub counter: u64,
-}
-
-pub struct P256DeriveAccountArgs {
-    pub public_key: [u8; 33],
-}
-
-impl<'a> From<&'a P256ParsedInitializationData> for P256DeriveAccountArgs {
-    fn from(data: &'a P256ParsedInitializationData) -> Self {
-        Self {
-            public_key: data.public_key.to_bytes(),
-        }
-    }
-}
-
-impl<'a> From<&'a P256ParsedVerificationData> for P256DeriveAccountArgs {
-    fn from(data: &'a P256ParsedVerificationData) -> Self {
-        Self {
-            public_key: data.public_key.to_bytes(),
-        }
-    }
-}
-
-#[derive(BorshDeserialize, BorshSerialize, Clone, Copy, Zeroable, Pod)]
-#[repr(C)]
-pub struct CompressedP256PublicKey {
-    pub x: [u8; 32],
-    pub y_parity: u8,
-}
-
-impl CompressedP256PublicKey {
-    pub fn new(public_key: &[u8]) -> Self {
-        Self {
-            x: public_key[1..33].try_into().unwrap(),
-            y_parity: public_key[0],
-        }
-    }
-    pub fn to_bytes(&self) -> [u8; 33] {
-        let mut bytes = [0u8; 33];
-        bytes[0] = self.y_parity;
-        bytes[1..33].copy_from_slice(&self.x);
-        bytes
-    }
-}
-#[derive(BorshDeserialize, BorshSerialize, Clone, Copy, Zeroable, Pod)]
-#[repr(C)]
-pub struct RpIdInformation {
-    pub rp_id_len: u8,
-    pub rp_id: [u8; 32],
-    pub rp_id_hash: [u8; 32],
-}
-
-impl RpIdInformation {
-    pub fn new(rp_id: &[u8], rp_id_hash: [u8; HASH_LENGTH]) -> Self {
-        Self {
-            rp_id_len: rp_id.len() as u8,
-            rp_id: {
-                let mut fixed_rp_id = [0u8; 32];
-                fixed_rp_id[..rp_id.len()].copy_from_slice(&rp_id);
-                fixed_rp_id
-            },
-            rp_id_hash: rp_id_hash,
-        }
-    }
-}
+use super::{
+    AccountSeeds, P256DeriveAccountArgs, P256ParsedInitializationData, P256ParsedVerificationData,
+    P256RawInitializationData, P256RawVerificationData, P256WebauthnAccountData,
+};
 
 impl ExternallySignedAccountData for P256WebauthnAccountData {
     type AccountSeeds = AccountSeeds;
@@ -184,11 +51,14 @@ impl ExternallySignedAccountData for P256WebauthnAccountData {
         args: &Self::ParsedInitializationData,
         session_key: Option<SessionKey>,
     ) -> Result<(), ProgramError> {
+        // Set fields from initialization data
         self.rp_id_info = args.rp_id_info;
         self.public_key = args.public_key;
         self.counter = args.counter;
 
+        // Set session key if provided
         if let Some(session_key) = session_key {
+            // Check that the session key is not above the expiration limit
             if session_key.expiration
                 > Clock::get()?.unix_timestamp as u64 + SESSION_KEY_EXPIRATION_LIMIT
             {
@@ -201,7 +71,9 @@ impl ExternallySignedAccountData for P256WebauthnAccountData {
         Ok(())
     }
 
+    /// Derives a new account from the public key
     fn derive_account(args: Self::DeriveAccountArgs) -> Result<Self::AccountSeeds, ProgramError> {
+        // Since the limit for seeds is 32 bytes per seed, we hash the public key
         let public_key_hash = hash(&args.public_key);
         let (derived_key, bump) =
             try_find_program_address(&[b"passkey", &public_key_hash], &crate::ID).unwrap();
@@ -214,6 +86,7 @@ impl ExternallySignedAccountData for P256WebauthnAccountData {
         })
     }
 
+    /// Derive the account seeds from the account data
     fn derive_existing_account(&self) -> Result<Self::AccountSeeds, ProgramError> {
         let seeds = Self::derive_account(Self::DeriveAccountArgs {
             public_key: self.public_key.to_bytes(),
@@ -222,17 +95,21 @@ impl ExternallySignedAccountData for P256WebauthnAccountData {
         Ok(seeds)
     }
 
+    /// Check the account based on the parsed verification data
     fn check_account(
         &self,
         account_info: &AccountInfo,
         _args: &Self::ParsedVerificationData,
     ) -> Result<Self::AccountSeeds, ProgramError> {
+        // Since the counter needs to be updated, we always need to check that
+        // the account is writable
         if !account_info.is_writable() {
             return Err(ExternalSignatureProgramError::AccountNotWritable.into());
         }
         let derive_args = Self::DeriveAccountArgs {
             public_key: self.public_key.to_bytes(),
         };
+        // Check that the account matches the seeds
         let account_seeds = Self::derive_account(derive_args)?;
         if account_seeds.key.ne(account_info.key()) {
             return Err(ProgramError::InvalidAccountOwner);
@@ -240,58 +117,88 @@ impl ExternallySignedAccountData for P256WebauthnAccountData {
         Ok(account_seeds)
     }
 
+    /// Verifies an instruction execution payload
     fn verify_payload<'a>(
         &mut self,
         instructions_sysvar_account: &Instructions<Ref<'a, [u8]>>,
         extra_verification_data: &Self::ParsedVerificationData,
         payload: &[u8],
     ) -> Result<(), ProgramError> {
+        // Load the ix at index 0
         let precompile_instruction = instructions_sysvar_account.load_instruction_at(0)?;
+
+        // Initialize the precompile parser
         let parser = PrecompileParser::<Secp256r1Precompile>::new(
             &precompile_instruction,
             &instructions_sysvar_account,
         )?;
+
+        // Check that there is only one signature
         let num_signatures = parser.num_signatures();
         if num_signatures != 1 {
             return Err(ExternalSignatureProgramError::InvalidNumPrecompileSignatures.into());
         }
-        let signature_payload = parser.get_signature_payload_at(0)?;
 
+        // Get the 0th signature payload
+        let signature_payload = parser.get_signature_payload(0)?;
+
+        // Check the payloads pubkey matches the account data
+        let payload_pubkey = signature_payload.public_key;
+        if payload_pubkey != self.public_key.to_bytes() {
+            return Err(ExternalSignatureProgramError::PublicKeyMismatch.into());
+        }
+
+        // Split the signature payload into auth data and client data hash
         let (auth_data, client_data_hash) = signature_payload
             .message
             .split_at(signature_payload.message.len() - 32);
+        // Create the auth data parser and get the RP ID hash
         let auth_data_parser = AuthDataParser::new(auth_data);
+
+        // Check that the user is present
+        if !auth_data_parser.is_user_present() {
+            return Err(ExternalSignatureProgramError::UserNotPresent.into());
+        }
+
+        // Check that the user is verified (Not sure whether we want to enforce
+        // this at all times yet, as it adds some extra friction with yubikeys)
+        // if !auth_data_parser.is_user_verified() {
+        //     return Err(ExternalSignatureProgramError::UserNotVerified.into());
+        // }
+
+        // Compare the RP ID hash from the auth data with the RP ID hash from the account data
         let rp_id_hash = auth_data_parser.rp_id_hash();
-
         let rp_id: &[u8] = &self.rp_id_info.rp_id[..(self.rp_id_info.rp_id_len as usize)];
-
         if self.rp_id_info.rp_id_hash.ne(&rp_id_hash) {
             return Err(ExternalSignatureProgramError::RelyingPartyMismatch.into());
         }
+
+        // Reconstruct the client data JSON
         let reconstructed_client_data = reconstruct_client_data_json(
             &extra_verification_data.client_data_json_reconstruction_params,
             &rp_id,
             &payload,
         );
-        // let base_64_payload = general_purpose::URL_SAFE_NO_PAD.encode(&payload);
-        // let base_64_reconstructed_client_data =
-        //     general_purpose::URL_SAFE_NO_PAD.encode(&reconstructed_client_data);
-
         let reconstructed_client_data_hash = hash(&reconstructed_client_data);
 
+        // Compare the reconstructed client data hash with the client data hash
         if reconstructed_client_data_hash != client_data_hash {
             return Err(ExternalSignatureProgramError::ClientDataHashMismatch.into());
         }
 
+        // Get the counter from the auth data
         let counter = auth_data_parser.get_counter();
 
+        // Update the counter if it is greater than the current counter
         if counter != 0 {
+            // Check that the counter is greater than the current counter
             assert!(counter as u64 > self.counter);
             self.counter = counter as u64;
         }
         Ok(())
     }
 
+    /// Verifies an initialization payload
     fn verfiy_initialization_payload<'a>(
         &mut self,
         instructions_sysvar_account: &Instructions<Ref<'a, [u8]>>,
@@ -307,18 +214,27 @@ impl ExternallySignedAccountData for P256WebauthnAccountData {
         Ok(())
     }
 
-    fn is_valid_session_key(&self, signer: &Pubkey) -> Result<(), ProgramError> {
+    /// Validates a session key
+    fn is_valid_session_key(&self, signer: &AccountInfo) -> Result<(), ProgramError> {
         let clock = Clock::get()?;
-        if self.session_key.key != *signer {
+        // Check that the signer is a signer
+        if !signer.is_signer() {
+            return Err(ExternalSignatureProgramError::SessionSignerNotASigner.into());
+        }
+        // Check that the signer is the session key
+        if self.session_key.key != *signer.key() {
             return Err(ExternalSignatureProgramError::InvalidSessionKey.into());
         }
+        // Check that the session key is not expired
         if self.session_key.expiration < clock.unix_timestamp as u64 {
             return Err(ExternalSignatureProgramError::SessionKeyExpired.into());
         }
         Ok(())
     }
 
+    /// Updates the session key
     fn update_session_key(&mut self, session_key: SessionKey) -> Result<(), ProgramError> {
+        // Check that the session key is not above the expiration limit
         if session_key.expiration
             > Clock::get()?.unix_timestamp as u64 + SESSION_KEY_EXPIRATION_LIMIT
         {

@@ -3,11 +3,13 @@ use core::mem::MaybeUninit;
 pub const HASH_LENGTH: usize = 32;
 
 #[inline(always)]
+// Simple wrapper around hashv to hash a single slice
 pub fn hash(data: &[u8]) -> [u8; HASH_LENGTH] {
     hashv(&[data])
 }
 
 #[inline(always)]
+// Simple wrapper around the hashv syscall to hash multiple slices
 pub fn hashv(data: &[&[u8]]) -> [u8; HASH_LENGTH] {
     let mut out = MaybeUninit::<[u8; HASH_LENGTH]>::uninit();
     unsafe {
@@ -18,6 +20,7 @@ pub fn hashv(data: &[&[u8]]) -> [u8; HASH_LENGTH] {
 
 #[inline(always)]
 #[allow(unused)]
+// Simple wrapper around the hashv syscall
 pub fn hash_into(data: &[&[u8]], out: *mut [u8; 32]) {
     #[cfg(target_os = "solana")]
     unsafe {

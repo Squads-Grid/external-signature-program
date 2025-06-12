@@ -18,7 +18,11 @@ pub struct AccountSessionAuthentication {
     pub account_pubkey: Pubkey,
     pub passkey_pubkey: [u8; 33],
 }
-pub fn test_session_authentication_from_fixture(payer: &Keypair, create_account_path: &str, refresh_session_key_path: &str) -> Result<AccountSessionAuthentication, Box<dyn std::error::Error>> {
+pub fn test_session_authentication_from_fixture(
+    payer: &Keypair,
+    create_account_path: &str,
+    refresh_session_key_path: &str,
+) -> Result<AccountSessionAuthentication, Box<dyn std::error::Error>> {
     let (mut svm, program_id) = initialize_svm(vec![payer.pubkey()]);
 
     let (hash, truncated_slot) = get_valid_slothash(&svm);
@@ -57,7 +61,10 @@ pub fn test_session_authentication_from_fixture(payer: &Keypair, create_account_
     let account = svm.get_account(&account_pubkey).unwrap();
     let account_data: &P256WebauthnAccountData = bytemuck::from_bytes(&account.data);
 
-    println!("Session Key Expiration: {:#?}", account_data.session_key.expiration);
+    println!(
+        "Session Key Expiration: {:#?}",
+        account_data.session_key.expiration
+    );
     // get the current system time in seconds
     let current_time = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -81,9 +88,10 @@ mod test_authentication {
 
     // #[test]
     fn test_yubikey_authentication() {
-        let payer =
-        Keypair::read_from_file("tests/p256/keypairs/sinf1bu1CMQaMzeDoysAU7dAp2gs5j2V3vM9W5ZXAyB.json")
-            .unwrap();
+        let payer = Keypair::read_from_file(
+            "tests/p256/keypairs/sinf1bu1CMQaMzeDoysAU7dAp2gs5j2V3vM9W5ZXAyB.json",
+        )
+        .unwrap();
         let _ = test_session_authentication_from_fixture(
             &payer,
             "tests/p256/fixtures/yubikey/creation.json",
@@ -93,9 +101,10 @@ mod test_authentication {
 
     #[test]
     fn test_chrome_authentication() {
-        let payer =
-        Keypair::read_from_file("tests/p256/keypairs/sinf1bu1CMQaMzeDoysAU7dAp2gs5j2V3vM9W5ZXAyB.json")
-            .unwrap();
+        let payer = Keypair::read_from_file(
+            "tests/p256/keypairs/sinf1bu1CMQaMzeDoysAU7dAp2gs5j2V3vM9W5ZXAyB.json",
+        )
+        .unwrap();
         let _ = test_session_authentication_from_fixture(
             &payer,
             "tests/p256/fixtures/chrome/creation.json",
@@ -105,9 +114,10 @@ mod test_authentication {
 
     // #[test]
     fn test_one_password_authentication() {
-        let payer =
-        Keypair::read_from_file("tests/p256/keypairs/sinf1bu1CMQaMzeDoysAU7dAp2gs5j2V3vM9W5ZXAyB.json")
-            .unwrap();
+        let payer = Keypair::read_from_file(
+            "tests/p256/keypairs/sinf1bu1CMQaMzeDoysAU7dAp2gs5j2V3vM9W5ZXAyB.json",
+        )
+        .unwrap();
         let _ = test_session_authentication_from_fixture(
             &payer,
             "tests/p256/fixtures/one-password/creation.json",
