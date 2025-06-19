@@ -20,10 +20,12 @@ impl ClientDataJsonReconstructionParams {
     const FLAG_CROSS_ORIGIN: u8 = 0x01;
     const FLAG_HTTP_ORIGIN: u8 = 0x02; // If not set, assume https://
     const FLAG_GOOGLE_EXTRA: u8 = 0x04; // Extra field that chrome uses to make sure the clientDataJson is not compared to a template
+    const FLAG_HAS_CROSS_ORIGIN_FIELD: u8 = 0x08; // If set, include the crossOrigin field in the JSON
 
     /// Used to create the params (mostly for client side)
     pub fn new(
         auth_type: AuthType,
+        has_cross_origin_field: bool,
         cross_origin: bool,
         is_http: bool,
         has_google_extra: bool,
@@ -43,6 +45,9 @@ impl ClientDataJsonReconstructionParams {
         if has_google_extra {
             value |= Self::FLAG_GOOGLE_EXTRA;
         }
+        if has_cross_origin_field {
+            value |= Self::FLAG_HAS_CROSS_ORIGIN_FIELD;
+        }
 
         Self {
             type_and_flags: value,
@@ -59,6 +64,10 @@ impl ClientDataJsonReconstructionParams {
         }
     }
 
+    /// Checks if the client data has the cross-origin field
+    pub fn has_cross_origin(&self) -> bool {
+        self.type_and_flags & Self::FLAG_HAS_CROSS_ORIGIN_FIELD != 0
+    }
     /// Checks if the origin is cross origin
     pub fn is_cross_origin(&self) -> bool {
         self.type_and_flags & Self::FLAG_CROSS_ORIGIN != 0
@@ -72,6 +81,11 @@ impl ClientDataJsonReconstructionParams {
     /// Checks if the google extra field is set
     pub fn has_google_extra(&self) -> bool {
         self.type_and_flags & Self::FLAG_GOOGLE_EXTRA != 0
+    }
+
+    /// Checks if the cross origin field should be included
+    pub fn has_cross_origin_field(&self) -> bool {
+        self.type_and_flags & Self::FLAG_HAS_CROSS_ORIGIN_FIELD != 0
     }
 }
 
@@ -123,8 +137,10 @@ pub fn reconstruct_client_data_json(
     json_bytes.extend_from_slice(challenge_b64url.as_bytes());
     json_bytes.extend_from_slice(b"\",\"origin\":\"");
     json_bytes.extend_from_slice(origin.as_bytes());
-    json_bytes.extend_from_slice(b"\",\"crossOrigin\":");
-    json_bytes.extend_from_slice(cross_origin.as_bytes());
+    if params.has_cross_origin() {
+        json_bytes.extend_from_slice(b"\",\"crossOrigin\":");
+        json_bytes.extend_from_slice(cross_origin.as_bytes());
+    }
 
     // Add Google's extra field if needed
     if params.has_google_extra() {
@@ -146,10 +162,11 @@ mod tests {
         // Set up the parameters
         let params = ClientDataJsonReconstructionParams::new(
             AuthType::Get, // Based on the provided type in the base64 string
-            false,         // cross_origin
+            true,          // cross_origin
             false,         // is_http
             false,         // has_google_extra
-            None,          // port
+            false,         // port
+            None,
         );
         let rp_id = "www.passkeys-debugger.io";
         let challenge = b"hello_world";
@@ -174,10 +191,11 @@ mod tests {
         // Set up the parameters with the extra field
         let params = ClientDataJsonReconstructionParams::new(
             AuthType::Get, // Based on the provided type in the base64 string
-            false,         // cross_origin
-            false,         // is_http
-            true,          // has_google_extra
-            None,          // port
+            true,
+            false, // cross_origin
+            false, // is_http
+            true,  // has_google_extra
+            None,  // port
         );
         let rp_id = "www.passkeys-debugger.io";
         let challenge = b"hello_world";
@@ -201,10 +219,11 @@ mod tests {
     fn test_reconstruct_client_data_json_with_port() {
         let params = ClientDataJsonReconstructionParams::new(
             AuthType::Get, // Based on the provided type in the base64 string
-            false,         // cross_origin
-            true,          // is_http
-            false,         // has_google_extra
-            Some(3000),    // port
+            true,
+            false,      // cross_origin
+            true,       // is_http
+            false,      // has_google_extra
+            Some(3000), // port
         );
         let rp_id = "localhost";
         let challenge = b"hello_world";
