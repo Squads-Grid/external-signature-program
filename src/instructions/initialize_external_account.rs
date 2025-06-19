@@ -4,7 +4,7 @@ use pinocchio::{
     account_info::{AccountInfo, Ref},
     instruction::{Seed, Signer},
     program_error::ProgramError,
-    sysvars::{instructions::Instructions, rent::Rent, Sysvar},
+    sysvars::{clock::Clock, instructions::Instructions, rent::Rent, Sysvar},
     ProgramResult,
 };
 use pinocchio_system::instructions::{Allocate, Assign, Transfer};
@@ -217,9 +217,23 @@ pub fn process_initialize_external_account(accounts: &[AccountInfo], data: &[u8]
     // Initialize the externally signed account
     let mut externally_owned_account = initialization_context.accounts.externally_signed_account;
 
+    // Calculate the session key expiration if there is one
+    let calculated_session_key: Option<SessionKey> = match initialization_context.session_key {
+        Some(session_key) => {
+            // Calculate the new session key expiration
+            let session_key_expiration =
+                Clock::get()?.unix_timestamp + session_key.expiration as i64;
+            Some(SessionKey {
+                key: session_key.key,
+                expiration: session_key_expiration as u64,
+            })
+        }
+        None => None,
+    };
+
     externally_owned_account.initialize_account(
         &initialization_context.signature_scheme_specific_initialization_data,
-        initialization_context.session_key,
+        calculated_session_key,
     )?;
 
     // Verify the initialization payload (since we depend on the contents of the
