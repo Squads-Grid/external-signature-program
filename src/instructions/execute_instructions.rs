@@ -1,8 +1,7 @@
 use crate::{
     state::{ExecutionAccount, ExternallySignedAccount, SignatureScheme, SignerExecutionScheme},
     utils::{
-        create_instruction_execution_account_metas, hash, validate_nonce, CompiledInstruction,
-        SlotHashes, TruncatedSlot,
+        create_instruction_execution_account_metas, hash, validate_nonce, CompiledInstruction, NonceData, SlotHashes, TruncatedSlot
     },
 };
 use borsh::{BorshDeserialize, BorshSerialize};
@@ -43,7 +42,7 @@ pub struct ExecuteInstructionsAccounts<'a, T: ExternallySignedAccountData> {
 
 // Sanitized and checked context for execution
 pub struct ExecuteInstructionsContext<'a, T: ExternallySignedAccountData> {
-    pub slothash: [u8; 32],
+    pub nonce_data: NonceData<'a>,
     pub execution_account: ExecutionAccount,
     pub signature_scheme_specific_verification_data: T::ParsedVerificationData,
     pub accounts: ExecuteInstructionsAccounts<'a, T>,
@@ -117,7 +116,7 @@ impl<'a, T: ExternallySignedAccountData> ExecuteInstructionsContext<'a, T> {
             execution_account,
             signature_scheme_specific_verification_data: parsed_verification_data,
             instruction_execution_account_metas,
-            slothash: nonce_data.slothash,
+            nonce_data,
             instructions: execution_args.instructions.as_slice(),
         }))
     }
@@ -126,9 +125,12 @@ impl<'a, T: ExternallySignedAccountData> ExecuteInstructionsContext<'a, T> {
     pub fn get_instruction_payload_hash(&self) -> [u8; 32] {
         let mut instruction_payload: Vec<u8> = Vec::new();
         // Nonce data
-        instruction_payload.extend_from_slice(self.slothash.as_slice());
-        instruction_payload.extend_from_slice(self.accounts.nonce_signer.key().as_ref());
+        instruction_payload.extend_from_slice(self.nonce_data.slothash.as_slice());
+        instruction_payload.extend_from_slice(self.nonce_data.signer_key.as_ref());
+        instruction_payload.extend_from_slice(b"execute_instructions");
 
+        // Number of instruction execution accounts
+        instruction_payload.push(self.accounts.instruction_execution_accounts.len() as u8);
         // Build the instruction execution accounts and their metas as they were
         // passed in
         self.accounts
@@ -213,6 +215,9 @@ pub fn process_execute_instructions(accounts: &[AccountInfo], data: &[u8]) -> Pr
             data: &instruction.data.as_slice(),
             accounts: &account_metas,
         };
+
+        // prevent against re-entrancy
+        assert_ne!(instruction_to_invoke.program_id, &crate::ID);
 
         // Invoke the instruction
         slice_invoke_signed(
