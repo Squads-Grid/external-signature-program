@@ -13,8 +13,7 @@ use crate::{
         ExternallySignedAccount, ExternallySignedAccountData, P256WebauthnAccountData, SessionKey,
         SignatureScheme,
     },
-    utils::nonce::{validate_nonce, TruncatedSlot},
-    utils::{hash, SlotHashes, SmallVec},
+    utils::{hash, nonce::{validate_nonce, TruncatedSlot}, NonceData, SlotHashes, SmallVec},
 };
 
 // Raw arguments for refresh session key instruction data
@@ -37,7 +36,7 @@ pub struct RefreshSessionKeyAccounts<'a, T: ExternallySignedAccountData> {
 
 // Sanitized and checked context for refresh session key
 pub struct RefreshSessionKeyContext<'a, T: ExternallySignedAccountData> {
-    pub slothash: [u8; 32],
+    pub nonce_data: NonceData<'a>,
     pub signature_scheme_specific_verification_data: T::ParsedVerificationData,
     pub accounts: RefreshSessionKeyAccounts<'a, T>,
     pub session_key: SessionKey,
@@ -86,7 +85,7 @@ impl<'a, T: ExternallySignedAccountData> RefreshSessionKeyContext<'a, T> {
         let nonce_data = validate_nonce(slothashes_sysvar, &args.slothash, nonce_signer)?;
 
         Ok(Box::new(Self {
-            slothash: nonce_data.slothash,
+            nonce_data,
             signature_scheme_specific_verification_data: parsed_verification_data,
             accounts: RefreshSessionKeyAccounts {
                 externally_signed_account,
@@ -101,8 +100,9 @@ impl<'a, T: ExternallySignedAccountData> RefreshSessionKeyContext<'a, T> {
     pub fn get_refresh_session_key_payload_hash(&self) -> [u8; 32] {
         let mut refresh_session_key_payload: Vec<u8> = Vec::with_capacity(104);
         // Nonce data
-        refresh_session_key_payload.extend_from_slice(self.slothash.as_slice());
-        refresh_session_key_payload.extend_from_slice(self.accounts.nonce_signer.key().as_ref());
+        refresh_session_key_payload.extend_from_slice(self.nonce_data.slothash.as_slice());
+        refresh_session_key_payload.extend_from_slice(self.nonce_data.signer_key.as_ref());
+        refresh_session_key_payload.extend_from_slice(b"refresh_session_key");
 
         // Session key
         self.session_key
