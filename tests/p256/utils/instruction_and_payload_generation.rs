@@ -148,6 +148,8 @@ pub fn print_instruction_payload() {
     let mut instruction_bytes: Vec<u8> = Vec::new();
     instruction_bytes.extend_from_slice(&hash);
     instruction_bytes.extend_from_slice(&nonce_signer.pubkey().to_bytes());
+    instruction_bytes.extend_from_slice(b"execute_instructions");
+    instruction_bytes.push(account_metas.len() as u8);
     for account_meta in account_metas {
         instruction_bytes.extend_from_slice(&account_meta.pubkey.to_bytes());
         instruction_bytes.push(account_meta.is_signer as u8);
