@@ -155,7 +155,7 @@ impl<'a, 'b, T: PrecompileInfo> PrecompileParser<'a, T> {
             LEGACY_SECP256K1_PRECOMPILE_ID => {
                 panic!("Not implemented");
             }
-            _ => {
+            SECP256R1_PRECOMPILE_ID => {
                 // Get the signature offsets for the desired index
                 let offset = bytemuck::try_from_bytes::<SignatureOffsets>(
                     &self.precompile_ix_data[offset_start..offset_start + signature_offsets_size],
@@ -229,6 +229,9 @@ impl<'a, 'b, T: PrecompileInfo> PrecompileParser<'a, T> {
                     message,
                     _marker: PhantomData,
                 }
+            }
+            _ => {
+                panic!("Precompile not implemented");
             }
         };
         Ok(payload)
