@@ -146,6 +146,9 @@ pub fn process_execute_instructions_sessioned(
             accounts: &account_metas,
         };
 
+        // prevent against re-entrancy
+        assert_ne!(instruction_to_invoke.program_id, &crate::ID);
+
         slice_invoke_signed(
             &instruction_to_invoke,
             filtered_account_infos.as_slice(),
