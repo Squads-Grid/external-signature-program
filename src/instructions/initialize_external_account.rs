@@ -86,6 +86,8 @@ impl<'a, T: ExternallySignedAccountData> InitializeExternalAccountContext<'a, T>
         let instructions_sysvar = Instructions::try_from(instructions_sysvar)?;
         let slothashes_sysvar = SlotHashes::try_from(slothashes_sysvar)?;
 
+        assert_eq!(system_program.key(), &pinocchio_system::ID);
+
         // Validate the nonce
         let nonce_data = validate_nonce(slothashes_sysvar, &args.slothash, rent_payer)?;
 
