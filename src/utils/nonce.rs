@@ -29,11 +29,16 @@ impl TruncatedSlot {
         // it means we've wrapped around the 1000 boundary
         let diff = if self.0 >= other.0 {
             // Normal case: current slot >= submitted slot
-            self.0 - other.0
+            self.0.checked_sub(other.0)
+                .ok_or(ExternalSignatureProgramError::InvalidTruncatedSlot)?
         } else {
             // Wraparound case: current slot < submitted slot
             // e.g., current=1, submitted=999 -> diff = 1 + (1000 - 999) = 2
-            self.0 + (1000 - other.0)
+            let wraparound_distance = 1000u16.checked_sub(other.0)
+                .ok_or(ExternalSignatureProgramError::InvalidTruncatedSlot)?;
+            
+            self.0.checked_add(wraparound_distance)
+                .ok_or(ExternalSignatureProgramError::InvalidTruncatedSlot)?
         };
         
         Ok(diff)
