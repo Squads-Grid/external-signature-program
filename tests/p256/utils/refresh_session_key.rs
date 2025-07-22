@@ -40,18 +40,17 @@ pub fn refresh_session_key(
         new_secp256r1_instruction(&webauthn_data.signature, &message_data, &public_key, None)
             .unwrap();
 
-    let client_data_json_reconstruction_params =
-        ClientDataJsonReconstructionParams::new(AuthType::Get, false, false, false, None);
     let extra_verification_data = P256RawVerificationData {
         public_key: public_key.clone().try_into().unwrap(),
-        client_data_json_reconstruction_params,
+        client_data_json_reconstruction_params: webauthn_data.client_data_json_reconstruction_params,
     };
     let execution_account = get_execution_account(passkey_account.clone(), program_id.clone());
     svm.airdrop(&execution_account, 1000000000).unwrap();
 
     let external_sig_ix_data = RefreshSessionKeyArgs {
         signature_scheme: 0,
-        verification_data: SmallVec::<u8, u8>::from(to_vec(&extra_verification_data).unwrap()),
+        verification_data: SmallVec::<u8, u8>::try_from(to_vec(&extra_verification_data).unwrap())
+            .unwrap(),
         session_key: TESTING_SESSION_KEY,
         slothash: slot_num,
     };

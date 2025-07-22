@@ -5,8 +5,8 @@
   "authenticatorAttachment": "platform",
   "response": {
     "authenticatorData": "PpZrl-Wqt-OFfBpyy2SraN1m7LT0GZORwGA7-6ujYkMFAAAAAA",
-    "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiaExNSzZobTJTbXB1M0k3SlIzaGpKNVduVl80b25ybEtYVEtnbUs4VC1NWSIsIm9yaWdpbiI6Imh0dHBzOi8vd3d3LnBhc3NrZXlzLWRlYnVnZ2VyLmlvIiwiY3Jvc3NPcmlnaW4iOmZhbHNlfQ",
-    "signature": "MEUCIQDLFxT_5Ot0mRXqVf4PPs6qmZB7WVRIE5e9edsIqBj6_gIgIyhWge9a_qQlKn2Wy8VLDMS3VOGX6wy8gJRfrPTrZSA",
+    "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiR3B4dUpqNk5YaWF3TE14R3JfRWEwejA5bzdpZ21CZi1tRWxRVk0wREpEUSIsIm9yaWdpbiI6Imh0dHBzOi8vd3d3LnBhc3NrZXlzLWRlYnVnZ2VyLmlvIiwiY3Jvc3NPcmlnaW4iOmZhbHNlfQ",
+    "signature": "MEQCIDoWWoBsL-KG9u7Wgpmq5KC9eHWiwuFQLysDSpkrq4hoAiA_ZzVAn3y-W0QYm8kZySn4SZehu5s3Ao1MDw_oaU9krA",
     "userHandle": "skji3OIxJTnPL9JvJwgDZCxirrpzpdDGTHBws351BbA",
     "publicKey": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAELpzCX-uhn1zBFPbt3SanK4VUCou9j_AnjiB7qPF10PSccw1RbPS6cKZsNnHrmTbUP-NSeEaqcydUW5QQ5D3RvQ"
   }

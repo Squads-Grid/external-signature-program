@@ -183,6 +183,13 @@ mod test_authentication {
     }
 
     #[test]
+    fn test_ios_crossplatform_authentication() {
+        test_authentication_from_fixture(
+            "tests/p256/fixtures/ios-crossplatform/creation.json",
+            "tests/p256/fixtures/ios-crossplatform/authentication.json",
+        );
+    }
+    #[test]
     fn test_invalid_slothash() {
         test_authentication_invalid_slothash(
             "tests/p256/fixtures/chrome/creation.json",

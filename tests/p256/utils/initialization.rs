@@ -61,7 +61,7 @@ pub fn initialize_passkey_account(
 
     // Construct the initialization instruction data
     let p256_webauthn_args = P256RawInitializationData {
-        rp_id: SmallVec::<u8, u8>::from(rp_id.to_vec()),
+        rp_id: SmallVec::<u8, u8>::try_from(rp_id.to_vec()).unwrap(),
         public_key: public_key.as_slice().try_into().unwrap(),
         client_data_json_reconstruction_params: webauthn_data
             .client_data_json_reconstruction_params

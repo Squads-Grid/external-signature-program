@@ -33,11 +33,12 @@ pub fn serialize_compiled_instruction(
         .iter()
         .map(|compiled_instruction| ExternalCompiledInstruction {
             program_id_index: compiled_instruction.program_id_index,
-            accounts_indices: SmallVec::<u8, u8>::from(compiled_instruction.accounts.clone()),
-            data: SmallVec::<u16, u8>::from(compiled_instruction.data.clone()),
+            accounts_indices: SmallVec::<u8, u8>::try_from(compiled_instruction.accounts.clone())
+                .unwrap(),
+            data: SmallVec::<u16, u8>::try_from(compiled_instruction.data.clone()).unwrap(),
         })
         .collect();
-    SmallVec::<u8, ExternalCompiledInstruction>::from(custom_compiled_instruction)
+    SmallVec::<u8, ExternalCompiledInstruction>::try_from(custom_compiled_instruction).unwrap()
 }
 pub fn create_memo_instruction() -> Instruction {
     let memo_program_id = Pubkey::from_str("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr").unwrap();
@@ -118,7 +119,8 @@ pub fn print_instruction_payload() {
 
     // Modify this line to change what fixture the payload is generated for
     // #########################################################
-    let json_data = fs::read_to_string("tests/p256/fixtures/yubikey/creation.json").unwrap();
+    let json_data =
+        fs::read_to_string("tests/p256/fixtures/ios-crossplatform/creation.json").unwrap();
     // #########################################################
 
     let webauthn_data = parse_webauthn_fixture(&json_data).unwrap();
@@ -218,6 +220,7 @@ pub fn print_session_key_payload() {
     let mut instruction_bytes: Vec<u8> = Vec::new();
     instruction_bytes.extend_from_slice(&hash);
     instruction_bytes.extend_from_slice(&nonce_signer.pubkey().to_bytes());
+    instruction_bytes.extend_from_slice(b"refresh_session_key");
     TESTING_SESSION_KEY
         .serialize(&mut instruction_bytes)
         .unwrap();
