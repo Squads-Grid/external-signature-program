@@ -39,11 +39,9 @@ pub fn authenticate_passkey_account(
         new_secp256r1_instruction(&webauthn_data.signature, &message_data, &public_key, None)
             .unwrap();
 
-    let client_data_json_reconstruction_params =
-        ClientDataJsonReconstructionParams::new(AuthType::Get, false, false, false, None);
     let extra_verification_data = P256RawVerificationData {
         public_key: public_key.clone().try_into().unwrap(),
-        client_data_json_reconstruction_params,
+        client_data_json_reconstruction_params: webauthn_data.client_data_json_reconstruction_params,
     };
 
     let execution_account = get_execution_account(passkey_account.clone(), program_id.clone());
@@ -59,9 +57,8 @@ pub fn authenticate_passkey_account(
     let external_sig_ix_data = ExecutableInstructionArgs {
         signature_scheme: 0,
         signer_execution_scheme: 0,
-        extra_verification_data: SmallVec::<u8, u8>::from(
-            to_vec(&extra_verification_data).unwrap(),
-        ),
+        extra_verification_data: SmallVec::<u8, u8>::try_from(to_vec(&extra_verification_data).unwrap())
+            .unwrap(),
         instructions: serialized_compiled_instruction,
         slothash: slot_num,
     };

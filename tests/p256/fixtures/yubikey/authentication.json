@@ -4,9 +4,9 @@
   "type": "public-key",
   "authenticatorAttachment": "cross-platform",
   "response": {
-    "authenticatorData": "PpZrl-Wqt-OFfBpyy2SraN1m7LT0GZORwGA7-6ujYkMFAAAACQ",
-    "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiNnp4N2N1UmVTM2lKdWJEN1k3V00yVGxqSUc0X01XUjBsUllsY25JS29tTSIsIm9yaWdpbiI6Imh0dHBzOi8vd3d3LnBhc3NrZXlzLWRlYnVnZ2VyLmlvIiwiY3Jvc3NPcmlnaW4iOmZhbHNlfQ",
-    "signature": "MEUCIBpPSdu--ZAfPVaTWsejGIuvV27PqxP4IxazV5RVoOW7AiEAt-l4z2rczFlRWDlD0V8gvgn_S8cI_t-S_uiuh6gXpUY",
+    "authenticatorData": "PpZrl-Wqt-OFfBpyy2SraN1m7LT0GZORwGA7-6ujYkMFAAAAHQ",
+    "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiSFp5M181eWo3QWRKeGwtZmJZcVVUcWhib2IyVHFpbTFRYnplRjNENlJpTSIsIm9yaWdpbiI6Imh0dHBzOi8vd3d3LnBhc3NrZXlzLWRlYnVnZ2VyLmlvIiwiY3Jvc3NPcmlnaW4iOmZhbHNlfQ",
+    "signature": "MEUCIQDAY4vp52TzhQPKoIpwmWspxd6eZh7s_OIocuyTuuWs2wIgEAcqMRUyMuryD7uZG9rAhqRemQydgCoiYdWYdlSVl_s",
     "userHandle": "03DX0uGKWfQ8ggqOTpSbqT1AWlT7gL3PbA0tjBrDtmk",
     "publicKey": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEUlQLOuHjZKlkpWkwYSKKj8v5YahkTD0hhhwA00swSMzVyPKilwRzFzNlzU_TVtcCL_Kdx-9wtiAZ98qB1h0ntw"
   }

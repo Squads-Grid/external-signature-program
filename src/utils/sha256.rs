@@ -21,7 +21,7 @@ pub fn hashv(data: &[&[u8]]) -> [u8; HASH_LENGTH] {
 #[inline(always)]
 #[allow(unused)]
 // Simple wrapper around the hashv syscall
-pub fn hash_into(data: &[&[u8]], out: *mut [u8; 32]) {
+pub unsafe fn hash_into(data: &[&[u8]], out: *mut [u8; 32]) {
     #[cfg(target_os = "solana")]
     unsafe {
         pinocchio::syscalls::sol_sha256(

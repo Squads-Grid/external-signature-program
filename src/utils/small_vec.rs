@@ -33,11 +33,21 @@ impl<L, T> From<SmallVec<L, T>> for Vec<T> {
     }
 }
 
-impl<L, T> From<Vec<T>> for SmallVec<L, T> {
-    fn from(val: Vec<T>) -> Self {
-        Self(val, PhantomData)
+impl<L, T> TryFrom<Vec<T>> for SmallVec<L, T> 
+where
+    L: TryFrom<usize>,
+{
+    type Error = &'static str;
+
+    fn try_from(val: Vec<T>) -> Result<Self, Self::Error> {
+        // Validate that the vector length doesn't exceed L's maximum capacity
+        if L::try_from(val.len()).is_err() {
+            return Err("Vector length exceeds SmallVec capacity");
+        }
+        Ok(Self(val, PhantomData))
     }
 }
+
 impl<T: BorshSerialize> BorshSerialize for SmallVec<u8, T> {
     fn serialize<W: Write>(&self, writer: &mut W) -> std::io::Result<()> {
         let len = u8::try_from(self.len()).map_err(|_| std::io::ErrorKind::InvalidInput)?;
@@ -114,6 +124,7 @@ fn serialize_slice<T: BorshSerialize, W: Write>(data: &[T], writer: &mut W) -> s
 mod test {
     use super::*;
     use solana_program::pubkey::Pubkey;
+
     mod deserialize {
         use super::*;
 
@@ -194,7 +205,7 @@ mod test {
 
         #[test]
         fn test_length_u8_type_u8() {
-            let small_vec = SmallVec::<u8, u8>::from(vec![3, 5]);
+            let small_vec = SmallVec::<u8, u8>::try_from(vec![3, 5]).unwrap();
 
             let mut output = vec![];
             small_vec.serialize(&mut output).unwrap();
@@ -211,7 +222,7 @@ mod test {
 
         #[test]
         fn test_length_u8_type_u32() {
-            let small_vec = SmallVec::<u8, u32>::from(vec![3, 5]);
+            let small_vec = SmallVec::<u8, u32>::try_from(vec![3, 5]).unwrap();
 
             let mut output = vec![];
             small_vec.serialize(&mut output).unwrap();
@@ -230,7 +241,7 @@ mod test {
         fn test_length_u8_type_pubkey() {
             let pubkey1 = Pubkey::new_unique();
             let pubkey2 = Pubkey::new_unique();
-            let small_vec = SmallVec::<u8, Pubkey>::from(vec![pubkey1, pubkey2]);
+            let small_vec = SmallVec::<u8, Pubkey>::try_from(vec![pubkey1, pubkey2]).unwrap();
 
             let mut output = vec![];
             small_vec.serialize(&mut output).unwrap();
@@ -248,7 +259,7 @@ mod test {
 
         #[test]
         fn test_length_u16_type_u8() {
-            let small_vec = SmallVec::<u16, u8>::from(vec![3, 5]);
+            let small_vec = SmallVec::<u16, u8>::try_from(vec![3, 5]).unwrap();
 
             let mut output = vec![];
             small_vec.serialize(&mut output).unwrap();
@@ -267,7 +278,7 @@ mod test {
         fn test_length_u16_type_pubkey() {
             let pubkey1 = Pubkey::new_unique();
             let pubkey2 = Pubkey::new_unique();
-            let small_vec = SmallVec::<u16, Pubkey>::from(vec![pubkey1, pubkey2]);
+            let small_vec = SmallVec::<u16, Pubkey>::try_from(vec![pubkey1, pubkey2]).unwrap();
 
             let mut output = vec![];
             small_vec.serialize(&mut output).unwrap();
@@ -281,6 +292,54 @@ mod test {
                 ]
                 .concat()[..]
             );
+        }
+    }
+
+    mod length_validation {
+        use super::*;
+
+        #[test]
+        fn test_try_from_vec_success() {
+            let vec = vec![1u8, 2u8, 3u8];
+            let small_vec = SmallVec::<u8, u8>::try_from(vec).unwrap();
+            assert_eq!(small_vec.len(), 3);
+        }
+
+        #[test]
+        fn test_try_from_vec_failure() {
+            let vec: Vec<u8> = (0..=255).collect(); // 256 elements
+            let result = SmallVec::<u8, u8>::try_from(vec);
+            assert!(result.is_err());
+            assert_eq!(result.unwrap_err(), "Vector length exceeds SmallVec capacity");
+        }
+
+        #[test]
+        fn test_try_from_vec_u16_success() {
+            let vec = vec![1u8, 2u8, 3u8];
+            let small_vec = SmallVec::<u16, u8>::try_from(vec).unwrap();
+            assert_eq!(small_vec.len(), 3);
+        }
+
+        #[test]
+        fn test_try_from_vec_u16_failure() {
+            let vec: Vec<u8> = vec![0; 65536]; // 65536 elements (exceeds u16::MAX)
+            let result = SmallVec::<u16, u8>::try_from(vec);
+            assert!(result.is_err());
+            assert_eq!(result.unwrap_err(), "Vector length exceeds SmallVec capacity");
+        }
+
+        #[test]
+        fn test_u16_capacity_boundary() {
+            let vec: Vec<u8> = vec![0; 65535]; // Exactly at u16::MAX
+            let small_vec = SmallVec::<u16, u8>::try_from(vec).unwrap();
+            assert_eq!(small_vec.len(), 65535);
+        }
+
+        #[test]
+        fn test_u8_capacity_boundary() {
+            let vec: Vec<u8> = vec![0; 255]; // Exactly at u8::MAX
+            let small_vec = SmallVec::<u8, u8>::try_from(vec).unwrap();
+            assert_eq!(small_vec.len(), 255);
         }
     }
 }

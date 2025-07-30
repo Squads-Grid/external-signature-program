@@ -199,7 +199,7 @@ impl ExternallySignedAccountData for P256WebauthnAccountData {
     }
 
     /// Verifies an initialization payload
-    fn verfiy_initialization_payload<'a>(
+    fn verify_initialization_payload<'a>(
         &mut self,
         instructions_sysvar_account: &Instructions<Ref<'a, [u8]>>,
         initialization_data: &Self::ParsedInitializationData,

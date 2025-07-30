@@ -86,6 +86,8 @@ impl<'a, T: ExternallySignedAccountData> InitializeExternalAccountContext<'a, T>
         let instructions_sysvar = Instructions::try_from(instructions_sysvar)?;
         let slothashes_sysvar = SlotHashes::try_from(slothashes_sysvar)?;
 
+        assert_eq!(system_program.key(), &pinocchio_system::ID);
+
         // Validate the nonce
         let nonce_data = validate_nonce(slothashes_sysvar, &args.slothash, rent_payer)?;
 
@@ -224,7 +226,7 @@ pub fn process_initialize_external_account(accounts: &[AccountInfo], data: &[u8]
 
     // Verify the initialization payload (since we depend on the contents of the
     // account to exist, we do this step last)
-    externally_owned_account.verfiy_initialization_payload(
+    externally_owned_account.verify_initialization_payload(
         &initialization_context.accounts.instructions_sysvar,
         &initialization_context.signature_scheme_specific_initialization_data,
         &initialization_payload_hash,

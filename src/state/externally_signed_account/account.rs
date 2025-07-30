@@ -68,6 +68,13 @@ impl<'a, T: ExternallySignedAccountData> ExternallySignedAccount<'a, T> {
     pub fn load(account_info: &'a AccountInfo) -> Result<Self, ProgramError> {
         // Will fail if the account is not writable
         let mut data = account_info.try_borrow_mut_data()?;
+
+        if account_info.data_is_empty() {
+            assert_eq!(unsafe { account_info.owner() }, &pinocchio_system::ID);
+        } else {
+            assert_eq!(unsafe { account_info.owner() }, &crate::ID);
+        }
+
         let data_ptr = data.as_mut_ptr(); // Get a raw pointer to the data
                                           // Won't be outlived, since the accountInfo is loaded in at the
                                           // instruction level
@@ -193,14 +200,14 @@ impl<'a, T: ExternallySignedAccountData> ExternallySignedAccount<'a, T> {
     }
 
     /// Verifies an initialization payload
-    pub fn verfiy_initialization_payload<'b>(
+    pub fn verify_initialization_payload<'b>(
         &mut self,
         instructions_sysvar_account: &Instructions<Ref<'b, [u8]>>,
         initialization_data: &T::ParsedInitializationData,
         payload: &[u8],
     ) -> Result<(), ProgramError> {
         let data = self.data()?;
-        T::verfiy_initialization_payload(
+        T::verify_initialization_payload(
             data,
             instructions_sysvar_account,
             initialization_data,

@@ -59,7 +59,7 @@ pub trait ExternallySignedAccountData: Pod + Zeroable + Clone + Copy {
     fn derive_existing_account<'a>(&self) -> Result<Self::AccountSeeds, ProgramError>;
 
     /// Verifies an initialization payload
-    fn verfiy_initialization_payload<'a>(
+    fn verify_initialization_payload<'a>(
         &mut self,
         instructions_sysvar_account: &Instructions<Ref<'a, [u8]>>,
         initialization_data: &Self::ParsedInitializationData,

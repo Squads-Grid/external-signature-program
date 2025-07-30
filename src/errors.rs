@@ -69,6 +69,8 @@ pub enum ExternalSignatureProgramError {
     /// P256 WebAuthn Related Errors
     #[error("Relying party ID too long. Max length is 32 bytes")]
     P256RelyingPartTooLong,
+    #[error("Relying party does not get to include quotes")]
+    P256RelyingPartIncludeQuotes,
     #[error("Relying party mismatch")]
     P256RelyingPartyMismatch,
     #[error("Client data hash mismatch")]
