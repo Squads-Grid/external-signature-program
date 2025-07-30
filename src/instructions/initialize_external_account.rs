@@ -226,7 +226,7 @@ pub fn process_initialize_external_account(accounts: &[AccountInfo], data: &[u8]
 
     // Verify the initialization payload (since we depend on the contents of the
     // account to exist, we do this step last)
-    externally_owned_account.verfiy_initialization_payload(
+    externally_owned_account.verify_initialization_payload(
         &initialization_context.accounts.instructions_sysvar,
         &initialization_context.signature_scheme_specific_initialization_data,
         &initialization_payload_hash,

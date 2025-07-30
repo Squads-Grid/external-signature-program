@@ -82,7 +82,13 @@ pub enum AuthType {
     Get,
 }
 
-/// Reconstructs the clientDataJson from the params, rp_id and challenge
+/// Reconstructs the clientDataJson from the params, rp_id and challenge.
+///
+/// Using the raw clientDataJson would be the ideal solution, but it takes up
+/// too much space within the transaction.
+///
+/// Note: Due to the nature of the potential of added fields by the client, this
+/// method is brittle.
 pub fn reconstruct_client_data_json(
     params: &ClientDataJsonReconstructionParams,
     rp_id: &[u8],
@@ -127,12 +133,19 @@ pub fn reconstruct_client_data_json(
     json_bytes.extend_from_slice(cross_origin.as_bytes());
 
     // Add Google's extra field if needed
+    // Google note: One should not compare an unparsed clientDataJSON against a
+    // template. We fully reconstruct the clientDataJSON, and don't compare to a
+    // template, so we arent subject to this notice. However due to the potential
+    // of added fields by the client, this method could be brittle in the future.
     if params.has_google_extra() {
         json_bytes.extend_from_slice(b",\"other_keys_can_be_added_here\":\"do not compare clientDataJSON against a template. See https://goo.gl/yabPex\"");
     }
 
     json_bytes.extend_from_slice(b"}");
-    // Convert to bytes
+
+    // Note on JSON formatting: Since we never actually parse the JSON, theres
+    // no attack vector on making trying to break it via escape chars etc. The raw bytes
+    // are later simply hashed to get the resulting client data hash.
     json_bytes
 }
 

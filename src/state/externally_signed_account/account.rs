@@ -200,14 +200,14 @@ impl<'a, T: ExternallySignedAccountData> ExternallySignedAccount<'a, T> {
     }
 
     /// Verifies an initialization payload
-    pub fn verfiy_initialization_payload<'b>(
+    pub fn verify_initialization_payload<'b>(
         &mut self,
         instructions_sysvar_account: &Instructions<Ref<'b, [u8]>>,
         initialization_data: &T::ParsedInitializationData,
         payload: &[u8],
     ) -> Result<(), ProgramError> {
         let data = self.data()?;
-        T::verfiy_initialization_payload(
+        T::verify_initialization_payload(
             data,
             instructions_sysvar_account,
             initialization_data,
